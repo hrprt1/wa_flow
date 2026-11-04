@@ -237,11 +237,8 @@ export class ProviderService implements OnModuleInit, OnModuleDestroy {
         requireThat(a, "WhatsApp is not connected.");
         return a;
     }
-    private dispatch(kind: string, payload: Row, tx?: Knex.Transaction) {
-        if (tx)
-            void tx.executionPromise.then(() => this.queue.enqueue(kind, payload)).catch(() => undefined);
-        else
-            return this.queue.enqueue(kind, payload);
+    private dispatch(kind: string, payload: Row, tx: Knex.Transaction) {
+        void tx.executionPromise.then(() => this.queue.enqueue(kind, payload)).catch(() => undefined);
     }
     async enqueueMessage(id: number, conversationId: number, body: string, clientKey: string, tx?: Knex.Transaction, replyTo?: number): Promise<number> {
         const action = async (db: Knex.Transaction) => {
@@ -338,6 +335,7 @@ export class ProviderService implements OnModuleInit, OnModuleDestroy {
                 business_id: id,
                 phone: d.phone
             }).first();
+            requireThat(!customer || Number(customer.opted_in), 'This contact has not opted in. Record renewed consent in Customers first.');
             if (!customer) {
                 const [n] = await tx("customers").insert({
                     business_id: id,
@@ -351,6 +349,7 @@ export class ProviderService implements OnModuleInit, OnModuleDestroy {
                 customer = {
                     id: n
                 };
+                await tx('customer_consent_events').insert({ business_id: id, customer_id: n, opted_in: true, source: 'Manual approved-template consent attestation', created_at: new Date() });
             }
             await tx("customers").where({
                 id: customer.id
@@ -400,11 +399,23 @@ export class ProviderService implements OnModuleInit, OnModuleDestroy {
     }
     async send(id: number) {
         const m = await this.db.transaction(async (tx) => {
+            const candidate = await tx('messages').where({ id }).first();
+            if (!candidate || candidate.status !== 'queued') return null;
+            await tx('businesses').where({ id: candidate.business_id }).forUpdate().first();
             const r = await tx("messages").where({
                 id
             }).forUpdate().first();
             if (!r || r.status !== "queued")
                 return null;
+            if (String(r.client_key || '').startsWith('campaign:')) {
+                const recipient = await tx('campaign_recipients').where({ business_id: r.business_id, message_id: id }).forUpdate().first();
+                const run = recipient && await tx('campaign_runs').where({ business_id: r.business_id, id: recipient.run_id }).forUpdate().first();
+                const customer = recipient && await tx('customers').where({ business_id: r.business_id, id: recipient.customer_id }).forUpdate().first();
+                if (!run || run.status === 'cancelled' || !Number(customer?.opted_in)) {
+                    await tx('messages').where({ id }).update({ status: 'cancelled', error_code: 'campaign_cancelled_or_consent_revoked', updated_at: new Date() });
+                    return null;
+                }
+            }
             await tx("messages").where({
                 id
             }).update({
@@ -430,7 +441,7 @@ export class ProviderService implements OnModuleInit, OnModuleDestroy {
             const b = await this.db("businesses").where({
                 id: m.business_id
             }).first();
-            if (!a || !customer || (!m.template_payload && !inWindow(c.last_inbound_at)) || !(await this.limits(m.business_id)).messages || (m.reply_to_id && (c.mode !== "ai" || !b.ai_enabled))) {
+            if (!a || !customer || (m.template_payload && !Number(customer.opted_in)) || (!m.template_payload && !inWindow(c.last_inbound_at)) || !(await this.limits(m.business_id)).messages || (m.reply_to_id && (c.mode !== "ai" || !b.ai_enabled))) {
                 await this.db("messages").where({
                     id
                 }).update({
@@ -449,6 +460,15 @@ export class ProviderService implements OnModuleInit, OnModuleDestroy {
                     body: m.body
                 }
             };
+            if (String(m.client_key || '').startsWith('campaign:')) {
+                const payload = parseJson(m.template_payload, {});
+                const template = (await this.templates(m.business_id)).find(t => t.name === payload.name && t.language === payload.language?.code);
+                const currentText = template && ['HEADER', 'BODY', 'FOOTER'].map(type => template.components.find((c: Row) => c.type === type)?.text).filter(Boolean).join('\n\n');
+                if (!template || currentText !== m.body || String(currentText).includes('{{')) {
+                    await this.db('messages').where({ id, status: 'sending' }).update({ status: 'failed', error_code: 'campaign_template_approval_or_content_changed', updated_at: new Date() });
+                    return;
+                }
+            }
             const result = await this.graph(this.crypto.decrypt(a.access_token), "POST", `${a.phone_number_id}/messages`, {
                 ...content,
                 messaging_product: "whatsapp",
@@ -550,6 +570,12 @@ export class ProviderService implements OnModuleInit, OnModuleDestroy {
                     };
                 }
                 const received = new Date(Math.min(Number(m.timestamp) * 1000, Date.now()));
+                const optedOut = m.type === 'text' && /^(STOP|UNSUBSCRIBE|CANCEL|END|QUIT)$/i.test(String(m.text?.body || '').trim());
+                if (optedOut) {
+                    await tx('customers').where({ business_id: id, id: customer.id }).update({ opted_in: false, updated_at: new Date() });
+                    await tx('customer_consent_events').insert({ business_id: id, customer_id: customer.id, opted_in: false, source: 'WhatsApp inbound opt-out', created_at: new Date() });
+                    await tx('conversations').where({ business_id: id, id: c.id }).update({ mode: 'human', updated_at: new Date() });
+                }
                 const [n] = await tx("messages").insert({
                     business_id: id,
                     conversation_id: c.id,
@@ -557,7 +583,7 @@ export class ProviderService implements OnModuleInit, OnModuleDestroy {
                     direction: "inbound",
                     status: "received",
                     provider_id: m.id,
-                    reply_state: m.type === "text" ? "pending" : null,
+                    reply_state: m.type === "text" && !optedOut ? "pending" : null,
                     created_at: received,
                     updated_at: new Date()
                 });
@@ -569,11 +595,11 @@ export class ProviderService implements OnModuleInit, OnModuleDestroy {
                     status: "open",
                     updated_at: new Date()
                 });
-                if (m.type === "text")
+                if (m.type === "text" && !optedOut)
                     await this.dispatch("generate-reply", {
                         messageId: n
                     }, tx);
-                else
+                else if (m.type !== 'text')
                     await this.handover(id, c.id, "Media requires a human response.", tx);
             }
             const rank: Row = {

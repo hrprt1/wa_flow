@@ -28,7 +28,7 @@ test('reset sends a normalized recipient and usable link; SMTP failures are acti
     sendMail: async (value: any) => { if (fail) throw new Error('private provider error'); message = value; },
     close: () => { closed++; },
   })) as any;
-  const db: any = (table: string) => ({
+  const db: any = () => ({
     where: (filter: any) => ({ first: async () => { assert.equal(filter.email, 'owner@example.com'); return { id: 1 }; } }),
     insert: (value: any) => ({ onConflict: () => ({ merge: async () => { stored = value; } }) }),
   });

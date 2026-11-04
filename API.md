@@ -1,489 +1,81 @@
-# WhatsApp AI Automation SaaS — API Specification
-
-## 1. API Principles
+# WaFlow REST API
 
-Base path:
-
-```text
-/api/v1
-```
-
-Use:
-
-- HTTPS
-- authenticated requests
-- server-side authorisation
-- request validation
-- pagination
-- consistent JSON responses
-- stable resource identifiers
-- idempotency for retryable operations
-- rate limiting
-
-## 2. Authentication
-
-Suggested endpoints:
-
-```text
-POST /auth/register
-POST /auth/login
-POST /auth/logout
-POST /auth/forgot-password
-POST /auth/reset-password
-GET  /auth/me
-```
-
-Example response:
-
-```json
-{
-  "data": {
-    "id": "user-id",
-    "name": "Example User",
-    "email": "user@example.com"
-  }
-}
-```
-
-Use the repository's existing authentication mechanism if one already exists.
-
-## 3. Business
-
-```text
-GET    /business
-PATCH  /business
-GET    /business/members
-POST   /business/members
-PATCH  /business/members/{member}
-DELETE /business/members/{member}
-```
-
-Do not allow a client to access another tenant by changing an ID.
-
-## 4. WhatsApp
-
-```text
-GET    /whatsapp/accounts
-POST   /whatsapp/accounts/connect
-GET    /whatsapp/accounts/{account}
-DELETE /whatsapp/accounts/{account}
-
-GET    /whatsapp/phone-numbers
-POST   /whatsapp/phone-numbers/sync
-
-GET    /whatsapp/templates
-POST   /whatsapp/templates/sync
-```
-
-Provider-specific connection requirements should be isolated inside the WhatsApp integration module.
-
-## 5. Webhooks
-
-```text
-GET  /webhooks/whatsapp
-POST /webhooks/whatsapp
-POST /webhooks/payment
-```
-
-Webhook requirements:
-
-1. Verify provider challenge/signature as required.
-2. Identify provider.
-3. Resolve tenant.
-4. Check duplicate external event ID.
-5. Persist event.
-6. Return success quickly.
-7. Queue processing.
-8. Mark event processed/failed.
-
-Never perform long AI work directly inside the webhook HTTP request.
-
-## 6. Customers
-
-```text
-GET    /customers
-POST   /customers
-GET    /customers/{customer}
-PATCH  /customers/{customer}
-DELETE /customers/{customer}
-
-POST   /customers/{customer}/tags
-DELETE /customers/{customer}/tags/{tag}
-POST   /customers/{customer}/assign
-```
-
-Query parameters:
-
-```text
-search
-status
-tag
-assigned_user
-source
-page
-per_page
-sort
-```
-
-## 7. Conversations
-
-```text
-GET   /conversations
-POST  /conversations/{conversation}/assign
-POST  /conversations/{conversation}/close
-POST  /conversations/{conversation}/reopen
-PATCH /conversations/{conversation}
-GET   /conversations/{conversation}/messages
-POST  /conversations/{conversation}/messages
-POST  /conversations/{conversation}/notes
-```
-
-Example send request:
-
-```json
-{
-  "type": "text",
-  "body": "Hello, how can I help?"
-}
-```
-
-The API should create a message record and queue external delivery where appropriate.
-
-## 8. Messages
-
-```text
-GET /conversations/{conversation}/messages
-POST /conversations/{conversation}/messages
-GET /messages/{message}
-```
-
-Message direction:
-
-```text
-inbound
-outbound
-```
-
-Message types may include:
-
-```text
-text
-image
-video
-audio
-document
-template
-interactive
-system
-```
-
-## 9. Products
-
-```text
-GET    /products
-POST   /products
-GET    /products/{product}
-PATCH  /products/{product}
-DELETE /products/{product}
-
-GET    /product-categories
-POST   /product-categories
-PATCH  /product-categories/{category}
-DELETE /product-categories/{category}
-```
-
-Product list parameters:
-
-```text
-search
-category
-status
-stock_status
-page
-per_page
-```
-
-## 10. Orders
-
-```text
-GET   /orders
-POST  /orders
-GET   /orders/{order}
-PATCH /orders/{order}
-POST  /orders/{order}/confirm
-POST  /orders/{order}/cancel
-```
-
-Order creation:
-
-```json
-{
-  "customer_id": "customer-id",
-  "items": [
-    {
-      "product_id": "product-id",
-      "quantity": 2
-    }
-  ],
-  "notes": "Deliver in the evening"
-}
-```
-
-The server must calculate authoritative prices. Never trust client-submitted totals.
-
-## 11. Automation
-
-```text
-GET    /automations
-POST   /automations
-GET    /automations/{automation}
-PATCH  /automations/{automation}
-DELETE /automations/{automation}
-
-POST   /automations/{automation}/activate
-POST   /automations/{automation}/pause
-POST   /automations/{automation}/test
-
-GET    /automations/{automation}/runs
-GET    /automation-runs/{run}
-```
-
-## 12. Automation Definition
-
-Initial representation can be JSON:
-
-```json
-{
-  "trigger": {
-    "type": "message_received"
-  },
-  "nodes": [
-    {
-      "key": "welcome",
-      "type": "send_message",
-      "config": {
-        "body": "Welcome!"
-      }
-    },
-    {
-      "key": "ai",
-      "type": "ai",
-      "config": {
-        "agent_id": "agent-id"
-      }
-    }
-  ]
-}
-```
-
-The actual schema must be versioned so future workflow changes do not silently break existing automations.
-
-## 13. AI
-
-```text
-GET   /ai/agents
-POST  /ai/agents
-GET   /ai/agents/{agent}
-PATCH /ai/agents/{agent}
-DELETE /ai/agents/{agent}
-
-POST  /ai/agents/{agent}/test
-GET   /ai/usage
-```
-
-## 14. Knowledge Base
-
-```text
-GET    /knowledge/sources
-POST   /knowledge/sources
-GET    /knowledge/sources/{source}
-DELETE /knowledge/sources/{source}
-
-POST   /knowledge/documents
-GET    /knowledge/documents
-DELETE /knowledge/documents/{document}
-POST   /knowledge/documents/{document}/reprocess
-```
-
-Document processing should be asynchronous.
-
-## 15. Campaigns
-
-```text
-GET    /campaigns
-POST   /campaigns
-GET    /campaigns/{campaign}
-PATCH  /campaigns/{campaign}
-DELETE /campaigns/{campaign}
-
-POST   /campaigns/{campaign}/test
-POST   /campaigns/{campaign}/schedule
-POST   /campaigns/{campaign}/pause
-POST   /campaigns/{campaign}/cancel
-
-GET    /campaigns/{campaign}/metrics
-```
-
-Campaign sending must use approved provider mechanisms and business-configured templates.
-
-## 16. Billing
-
-```text
-GET  /billing/plans
-GET  /billing/subscription
-POST /billing/checkout
-POST /billing/change-plan
-POST /billing/cancel
-GET  /billing/invoices
-GET  /billing/usage
-```
-
-Provider webhooks:
-
-```text
-POST /webhooks/payment
-```
-
-## 17. Analytics
-
-```text
-GET /analytics/overview
-GET /analytics/conversations
-GET /analytics/customers
-GET /analytics/leads
-GET /analytics/orders
-GET /analytics/campaigns
-GET /analytics/ai
-GET /analytics/usage
-```
-
-All analytics endpoints must enforce tenant scope.
-
-## 18. Pagination
-
-Recommended response:
-
-```json
-{
-  "data": [],
-  "meta": {
-    "current_page": 1,
-    "per_page": 25,
-    "total": 100
-  }
-}
-```
-
-Use cursor pagination for very large/high-volume streams when appropriate.
-
-## 19. Error Format
-
-Recommended:
-
-```json
-{
-  "message": "Validation failed.",
-  "errors": {
-    "phone": [
-      "The phone field is required."
-    ]
-  },
-  "code": "VALIDATION_ERROR"
-}
-```
-
-Do not expose stack traces or secrets in production.
-
-## 20. HTTP Status Conventions
-
-```text
-200 OK
-201 Created
-202 Accepted
-204 No Content
-400 Bad Request
-401 Unauthenticated
-403 Forbidden
-404 Not Found
-409 Conflict
-422 Validation Error
-429 Rate Limited
-500 Server Error
-502 Provider Error
-503 Service Unavailable
-```
-
-## 21. Idempotency
-
-Operations that may be retried should support idempotency.
-
-Examples:
-
-- outbound message creation
-- payment handling
-- webhook processing
-- campaign scheduling
-
-Use provider IDs or client idempotency keys where appropriate.
-
-## 22. Authorisation
-
-Every protected endpoint must check:
-
-1. authenticated user
-2. business membership
-3. role/permission
-4. ownership/tenant scope
-5. resource-level policy where needed
-
-## 23. Rate Limiting
-
-Apply appropriate limits to:
-
-- login
-- password reset
-- public webhook endpoints
-- AI test endpoints
-- message sending
-- campaign actions
-- expensive analytics
-
-Provider-specific sending limits must also be respected.
-
-## 24. API Security Rules
-
-Never:
-
-- accept arbitrary business_id as proof of tenant access
-- expose provider credentials
-- trust client-calculated order totals
-- skip validation
-- return internal exception traces
-- synchronously perform large AI/document operations in ordinary HTTP requests
-
-## 25. API Versioning
-
-Start with:
-
-```text
-/api/v1
-```
-
-Breaking changes should use a new API version rather than silently changing existing contracts.
-
-## 26. Testing Requirements
-
-At minimum, feature tests should cover:
-
-- authentication
-- tenant isolation
-- customer CRUD
-- conversation access
-- message sending
-- webhook idempotency
-- automation execution
-- AI handover
-- order totals
-- subscription limits
-- billing webhook processing
-- permission enforcement
+Base path `/api/v1`. This documents current controllers and the bounded marketing extension; the target additions section is a roadmap, not available routes.
+
+## Session and errors
+
+Browser requests use the HttpOnly waflow.sid cookie. GET /session first, retain cookies and send data.csrf as X-CSRF-TOKEN on mutations including login. Origin must match APP_URL. Refresh session after authentication because tokens rotate. Webhooks use provider HMAC instead of CSRF.
+
+Success normally wraps data; webhooks return received:true. Errors contain message and sometimes field errors. Current API has no universal error code. Typical statuses: validation 422, unauthenticated 401, forbidden 403, not found 404, expired CSRF 419 and rate limit 429. Nest POST defaults to 201 unless overridden; accept successful 2xx codes. Never repeat provider mutations merely because the browser lost a response.
+
+## Authentication
+
+| Method/path | Behavior |
+|---|---|
+| GET /session | user (nullable), csrf, demo_available |
+| POST /auth/register | name,business,email,password,password_confirmation; password 10–200 chars with letter and digit |
+| POST /auth/login | Login and session rotation |
+| POST /auth/logout | Regenerate session |
+| POST /auth/forgot-password | Reset request; real SMTP required |
+| POST /auth/reset-password | Token/email/confirmed password; invalidate old sessions |
+| POST /auth/demo | Nonproduction demo |
+
+## Workspace
+
+GET /workspace returns a bounded tenant snapshot. Tenant is derived from membership, currently the user's first membership; explicit workspace selection is a target feature. It is not a full-history export.
+
+POST /:resource supports customers (name, E.164 phone, optional email, tag, optional opted_in and consent_source required if true), products (name,sku,category,price_paise,stock), automations (name,keyword,response), knowledge (title,content), campaigns (name,audience,body). Campaign audience is All opted-in customers, VIP or New. Unknown resources are rejected.
+
+PATCH /:resource/:id supports conversations (open/resolved, ai/human, assignee, unread=0), automations (active), customers (status,tag and marketing permission extension), businesses (name,industry,email). Workspace mutations currently require owner/admin/manager. POST /conversations/:id/messages handles notes/replies; live replies need unique client_key and an open reply window. POST /conversations/:id/simulate is demo behavior.
+
+## Bounded marketing extension
+
+| Method/path | Payload / behavior |
+|---|---|
+| POST /customers/import | {csv,consent_source?}; required headers name,phone; optional email,tag,opted_in; up to 100 rows and 100 total contacts; source required if any opted_in=true; validate atomically, skip existing duplicates without re-opting them in |
+| PATCH /customers/:id | opted_in:boolean and consent_source required when granting; permission events persisted in customer_consent_events |
+| POST /campaigns/:id/preview | {}; evaluate permitted audience |
+| POST /campaigns/:id/schedule | template_name,language,scheduled_at? (ISO with offset, within 90 days),consent_confirmed:true |
+| POST /campaigns/:id/cancel | {}; stop pending campaign work |
+| GET /campaigns/:id/status | Campaign recipient/outcome status |
+
+Only approved static templates without parameters/media/buttons are supported by this campaign path. Existing body drafts do not permit arbitrary free-form bulk sends. Scheduling and worker processing must preserve tenant scope, suppression, usage limits and duplicate protection. Configured MySQL schema/provider access is needed for end-to-end execution; source/build checks are not live-send acceptance.
+
+## Integration and billing
+
+Integration operations require owner/admin. Billing mutations require owner. Temporary demo tenants cannot perform real provider actions.
+
+| Method/path | Request/behavior |
+|---|---|
+| POST /integrations/whatsapp | phone_number_id,access_token,app_secret?,waba_id?; advanced manual connection |
+| GET /integrations/whatsapp/templates | Connected account templates |
+| POST /integrations/whatsapp/templates/send | phone,name,language,parameters,client_key,consent:true; individual send |
+| POST /integrations/whatsapp/subscribe | Subscribe WABA |
+| POST /integrations/whatsapp/signup/start | Session/user/tenant-bound state |
+| POST /integrations/whatsapp/signup/exchange | state,code |
+| POST /integrations/whatsapp/signup/complete | state,waba_id,phone_number_id |
+| PATCH /integrations/ai | ai_enabled:boolean |
+| POST /integrations/ai/test | question |
+| POST /billing/subscribe | Server-owned plan key |
+| POST /billing/sync | Refresh subscription |
+| POST /billing/cancel | Schedule cancellation |
+| POST /billing/reconcile | provider_id |
+| POST /billing/verify | Razorpay payment/subscription IDs and signature |
+
+## Webhooks
+
+GET /webhooks/whatsapp and /webhooks/whatsapp/:key verify hub.mode, hub.verify_token and hub.challenge. POST to either validates X-Hub-Signature-256 over exact raw bytes. POST /webhooks/razorpay validates X-Razorpay-Signature. The account key does not replace HMAC. Resolve tenants through stored account/phone mapping, persist events and process asynchronously. Preserve bytes/headers at proxies.
+
+## Target additions (not implemented by this specification)
+
+- GET/POST /workspaces; POST /workspaces/:id/select; membership management.
+- Paginated GET /customers, GET/PATCH/DELETE /customers/:id, import preview/confirm/error-report operations.
+- Category-level consent events/preferences, tags and saved segment CRUD/preview.
+- Expanded template synchronization/submission and supported component mapping.
+- Paginated GET /campaigns, campaign test operation, metrics and analytics endpoints.
+- Explicitly privileged /admin/businesses, /admin/jobs, /admin/usage and /admin/audit-logs.
+
+Target lists use stable cursors and page size at most 100. Target schedule mutations should support persisted idempotency keys and expected_version; key/content conflicts and concurrent edits return 409. SQL outbox publication follows transaction commit. Report rates with denominators and update times; absent read receipts are not delivery failures. Never accept client business_id, recipient count or calculated allowance as authoritative.
+
+
+Current preview response: data:{eligible,excluded,templates:[{name,language,body}]}. Schedule response: data:{id,status:"scheduled",recipients}. Each draft can be scheduled only once; another attempt returns 409. Status response: data:{run:null,counts:{}} before scheduling, otherwise run contains id,status,scheduled_at,template_name,language and counts groups current recipient/message statuses. Cancel returns data:{cancelled:true}. Preview is bounded and not a full-dataset analytics endpoint. CSV opted_in accepts true/false/empty; empty defaults false, tag defaults New. Files are bounded to 200 KB and duplicate phone rows within one file reject the import. Current permission evidence is operator-supplied source text and recorded timestamp, not independently verified proof.

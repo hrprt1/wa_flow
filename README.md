@@ -2,6 +2,33 @@
 
 The default application now runs natively on Next.js 16 (React 19 App Router) and NestJS 11 with TypeScript. The existing MySQL schema, accounts, business memberships, records, and encrypted provider credentials are preserved. The Node runtime does not proxy requests to Laravel or require PHP.
 
+## WhatsApp marketing platform
+
+The workspace now includes a guided first-campaign checklist, CSV contact import,
+consent evidence and opt-out management, approved text-template campaign review,
+immediate or future scheduling, cancellation, and per-recipient delivery counts.
+Run `npm run db:migrate` before using these additions: it adds consent history,
+campaign runs and campaign recipients alongside the existing runtime tables.
+Existing contacts and campaign drafts are preserved. Each draft supports one run;
+create another draft to send another campaign. Contact sections remain capped at
+100 records. Template variables, buttons and media are excluded from campaign sends.
+
+CSV headers are `name,phone,email,tag,opted_in`; only name and phone are required.
+Use E.164 phones such as `+919876543210`, and literal `true` or `false` consent.
+A consent source is required for opt-ins. Existing numbers are skipped without
+changing their consent. Exact inbound STOP, UNSUBSCRIBE, CANCEL, END and QUIT
+messages revoke marketing consent. Consent is rechecked at dispatch; messages
+already being sent cannot be recalled. Unknown provider outcomes require review
+in Meta and are not automatically resent.
+
+Product and implementation documents: [PRD](PRD.md), [architecture](ARCHITECTURE.md),
+[database](DATABASE.md), [API](API.md), [roadmap](ROADMAP.md),
+[testing](TESTING.md), and [deployment/security](OPERATIONS.md).
+MySQL is the approved database. The runtime uses MySQL/Knex and the durable
+database queue; no database or query-builder replacement is planned.
+Redis/BullMQ integration remains roadmap work. Compose provides isolated local MySQL/Redis services and does not
+restore the existing application schema or migrate records.
+
 ## Install and run
 
 Use Node.js 22.12+ or Node.js 24 and the existing MySQL database.
@@ -21,7 +48,7 @@ npm run dev
 
 Open `http://127.0.0.1:3000/app/`. Next serves the UI on port 3000 and forwards `/api/v1/*` to Nest on port 4000. Nest's development command compiles TypeScript before Node runs it so dependency-injection metadata is available.
 
-The additive migration verifies the existing schema and creates only `node_sessions` and `node_jobs`. It does not reset, rename, or delete application tables. This conversion targets the existing database; provisioning a fresh database requires restoring its complete schema first.
+The additive migration verifies the existing schema and creates missing `node_sessions`, `node_jobs`, `customer_consent_events`, `campaign_runs`, and `campaign_recipients` tables. It does not reset, rename, or delete application tables. This conversion targets the existing database; provisioning a fresh database requires restoring its complete schema first.
 
 ## Preserved application features
 
@@ -138,4 +165,6 @@ Tests cover validation, tenant boundaries, Laravel bcrypt and encryption compati
 - `backend/src/common/`: MySQL, sessions, CSRF boundary, authenticated access, credential encryption, and durable job queue.
 - `backend/src/migrate.ts`: additive Node runtime-table migration.
 
-The PRD, API, and database design files remain the product blueprint. Campaign sending, unsupported media, team invitations, full-history pagination, and tax invoices were not implemented in the original application and are not added by this framework conversion.
+The product documents distinguish implemented behavior from the remaining roadmap.
+Team invitations, platform-wide administration, full-history pagination, tax
+invoices, advanced template authoring and media campaigns remain future work.

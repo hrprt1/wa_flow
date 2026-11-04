@@ -9,6 +9,7 @@ import { DatabaseService } from "../common/database.service";
 import { ProviderService } from "../providers/provider.service";
 import { validate } from "../auth/validation";
 import { schemaFor, stores, updates } from "./schemas";
+import { parseContactsCsv } from './contact-import';
 
 @Injectable()
 export class WorkspaceService {
@@ -98,19 +99,22 @@ export class WorkspaceService {
             "The local workspace supports 100 records per section.",
           );
         const now = new Date();
+        const { consent_source, ...record } = data;
         const [id] = await trx(resource).insert({
-          ...data,
+          ...record,
           business_id: businessId,
           created_at: now,
           updated_at: now,
         });
-        if (resource === "customers")
+        if (resource === "customers") {
           await trx("conversations").insert({
             business_id: businessId,
             customer_id: id,
             created_at: now,
             updated_at: now,
           });
+          await trx('customer_consent_events').insert({ business_id: businessId, customer_id: id, opted_in: !!data.opted_in, source: consent_source || 'No marketing consent provided', created_at: now });
+        }
         return id;
       });
       return { data: { id } };
@@ -133,6 +137,19 @@ export class WorkspaceService {
       string,
       unknown
     >;
+    if (resource === 'customers') {
+      await this.database.db.transaction(async trx => {
+        await trx('businesses').where({ id: businessId }).forUpdate().first();
+        const customer = await trx('customers').where({ id, business_id: businessId }).forUpdate().first();
+        if (!customer) throw new NotFoundException();
+        const { consent_source, ...record } = data;
+        const now = new Date();
+        await trx('customers').where({ id, business_id: businessId }).update({ ...record, updated_at: now });
+        if (typeof data.opted_in === 'boolean')
+          await trx('customer_consent_events').insert({ business_id: businessId, customer_id: id, opted_in: data.opted_in, source: consent_source || 'Opted out by workspace operator', created_at: now });
+      });
+      return { data: { saved: true } };
+    }
     const query = this.database
       .db(resource)
       .where({
@@ -143,6 +160,29 @@ export class WorkspaceService {
     if (!(await query.clone().first())) throw new NotFoundException();
     await query.update({ ...data, updated_at: new Date() });
     return { data: { saved: true } };
+  }
+
+  async importCustomers(businessId: number, body: unknown) {
+    const data = validate(z.object({ csv: z.string().min(1).max(200_000), consent_source: z.string().trim().max(255).optional() }), body);
+    const contacts = parseContactsCsv(data.csv);
+    if (contacts.some(c => c.opted_in) && !data.consent_source)
+      throw new UnprocessableEntityException('Record how and when these customers agreed to WhatsApp marketing.');
+    return this.database.db.transaction(async trx => {
+      await trx('businesses').where({ id: businessId }).forUpdate().first();
+      const existing = await trx('customers').where({ business_id: businessId }).whereIn('phone', contacts.map(c => c.phone)).select('phone');
+      const phones = new Set(existing.map(c => c.phone));
+      const fresh = contacts.filter(c => !phones.has(c.phone));
+      const count = await trx('customers').where({ business_id: businessId }).count({ count: '*' }).first();
+      if (Number(count?.count) + fresh.length > 100)
+        throw new UnprocessableEntityException('This workspace supports 100 contacts. No contacts were imported.');
+      const now = new Date();
+      for (const contact of fresh) {
+        const [id] = await trx('customers').insert({ ...contact, business_id: businessId, created_at: now, updated_at: now });
+        await trx('conversations').insert({ business_id: businessId, customer_id: id, created_at: now, updated_at: now });
+        await trx('customer_consent_events').insert({ business_id: businessId, customer_id: id, opted_in: contact.opted_in, source: contact.opted_in ? data.consent_source : 'No marketing consent provided', created_at: now });
+      }
+      return { data: { imported: fresh.length, skipped: contacts.length - fresh.length } };
+    });
   }
 
   async message(businessId: number, conversationId: number, body: unknown) {

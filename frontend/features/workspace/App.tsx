@@ -3,7 +3,6 @@ import {
   useEffect,
   useRef,
   useState,
-  type FormEvent,
   type ReactNode,
 } from "react";
 import {
@@ -17,14 +16,12 @@ import {
   ChevronDown,
   ChevronRight,
   CircleHelp,
-  Command,
   CreditCard,
   LayoutDashboard,
   LogOut,
   Megaphone,
   Menu,
   MessageCircle,
-  MoreHorizontal,
   Moon,
   Package,
   Plus,
@@ -44,6 +41,8 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useTheme } from "@/lib/theme";
 import { IntegrationSettings, BillingPanel } from "./Integrations";
+import { ContactImport, ContactConsent } from './Contacts';
+import { Campaigns } from './Campaigns';
 import type { Conversation, User, Workspace } from "./types";
 
 const navigation = [
@@ -168,7 +167,8 @@ export default function App() {
       router.replace('/login');
       return;
     }
-    if (data.user) { setUser(data.user); await refresh(); }
+    setUser(data.user);
+    await refresh();
   }
   useEffect(() => {
     session()
@@ -521,6 +521,15 @@ export default function App() {
           </div>
           {page === "Overview" && (
             <>
+              <section className="card" style={{ padding: 24, marginBottom: 24 }} aria-label="Get started">
+                <h2>Your first WhatsApp campaign</h2>
+                <p className="muted">Follow these three steps to reach customers who want to hear from you.</p>
+                <div className="tile-grid" style={{ marginTop: 16 }}>
+                  <button onClick={() => navigate('Settings')}><span>{w.integrations.whatsapp ? '✓' : '1.'}</span> Connect WhatsApp <ArrowRight size={16}/></button>
+                  <button onClick={() => navigate('Customers')}><span>{w.customers.some(c => c.opted_in) ? '✓' : '2.'}</span> Import customers & record consent <ArrowRight size={16}/></button>
+                  <button onClick={() => navigate('Campaigns')}><span>3.</span> Review & send a campaign <ArrowRight size={16}/></button>
+                </div>
+              </section>
               <div className="welcome-banner">
                 <div className="welcome-art">
                   <MessageCircle size={31} />
@@ -818,6 +827,7 @@ export default function App() {
                   <ArrowDownToLine size={16} />
                   Export CSV
                 </button>
+                <ContactImport refresh={refresh}/>
               </div>
               <div className="table-scroll">
                 <table>
@@ -869,7 +879,7 @@ export default function App() {
                             </Badge>
                           </td>
                           <td className="muted">
-                            {c.opted_in ? "Opted in" : "Not provided"}
+                            <ContactConsent customer={c} refresh={refresh}/>
                           </td>
                           <td>
                             <button
@@ -1029,53 +1039,7 @@ export default function App() {
               )}
             </>
           )}
-          {page === "Campaigns" && (
-            <>
-              <div className="info-strip">
-                <Megaphone size={18} />
-                <span>
-                  Campaigns are saved as drafts. Sending requires an official
-                  WhatsApp connection and approved templates.
-                </span>
-              </div>
-              <div className="tile-grid">
-                {w.campaigns.map((c) => (
-                  <section className="card campaign-card" key={c.id}>
-                    <div className="tile-top">
-                      <span className="tile-icon peach">
-                        <Megaphone size={23} />
-                      </span>
-                      <Badge tone="amber">{c.status}</Badge>
-                    </div>
-                    <h2>{c.name}</h2>
-                    <p>{c.body}</p>
-                    <div className="tile-footer">
-                      <span>
-                        <Users size={15} /> {c.audience}
-                      </span>
-                      <span>
-                        {
-                          w.customers.filter(
-                            (v) =>
-                              v.opted_in &&
-                              (c.audience === "All opted-in customers" ||
-                                v.tag === c.audience),
-                          ).length
-                        }{" "}
-                        eligible
-                      </span>
-                    </div>
-                  </section>
-                ))}
-              </div>
-              {!w.campaigns.length && (
-                <Empty
-                  title="Your next story starts here"
-                  body="Create a campaign draft to prepare your next announcement."
-                />
-              )}
-            </>
-          )}
+          {page === "Campaigns" && <Campaigns w={w} refresh={refresh}/>}
           {page === "Settings" && <><section className="card settings-card business-profile"><h2>Business profile</h2><form key={w.business.name} onSubmit={e => { e.preventDefault(); mutate(`businesses/${w.business.id}`, 'PATCH', Object.fromEntries(new FormData(e.currentTarget))); }}><div className="form-row"><label>Business name<input name="name" defaultValue={w.business.name} required maxLength={100}/></label><label>Industry<input name="industry" defaultValue={w.business.industry} required maxLength={100}/></label><label>Business email<input name="email" defaultValue={w.business.email || ''} type="email"/></label></div><button className="primary" disabled={busy}>Save changes</button></form></section><IntegrationSettings w={w} busy={busy} mutate={mutate} refresh={refresh}/></>}
           {page === "Usage & plan" && <BillingPanel w={w} busy={busy} mutate={mutate} refresh={refresh}/>}
         </div>
@@ -1488,7 +1452,7 @@ function ModalView({
             </li>
           </ol>
           <p>
-            Configure live WhatsApp, OpenAI, and Razorpay in Settings and Billing. A permanent account, provider credentials, public HTTPS webhooks, and a running queue worker are required. Campaign sending and media processing remain outside this release.
+            Configure live WhatsApp, OpenAI, and Razorpay in Settings and Billing. A permanent account, provider credentials, public HTTPS webhooks, and a running queue worker are required. Campaigns use approved text templates and opted-in customers. Media campaigns are not supported.
           </p>
         </div>
       ) : (
@@ -1536,6 +1500,7 @@ function ModalView({
                 <input name="opted_in" type="checkbox" />
                 Customer has agreed to receive marketing messages
               </label>
+              <label>Consent source (required when opted in)<input name="consent_source" maxLength={255} placeholder="e.g. In-store signup form, date"/></label>
             </>
           )}
           {modal === "products" && (

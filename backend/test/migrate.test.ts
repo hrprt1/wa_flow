@@ -8,7 +8,7 @@ function database(options: { missing?: string; failure?: string } = {}) {
   const created: string[] = [];
   const db = { schema: {
     async hasTable(name: string) {
-      return name.startsWith('node_') ? runtime.has(name) : name !== options.missing;
+      return ['node_sessions', 'node_jobs', 'customer_consent_events', 'campaign_runs', 'campaign_recipients'].includes(name) ? runtime.has(name) : name !== options.missing;
     },
     async createTable(name: string) {
       if (options.failure) throw Object.assign(new Error('DDL failed'), { code: options.failure });
@@ -22,7 +22,7 @@ test('repeated startup migration creates only missing runtime tables', async () 
   const fixture = database();
   await migrate(fixture.service);
   await migrate(fixture.service);
-  assert.deepEqual(fixture.created, ['node_sessions', 'node_jobs']);
+  assert.deepEqual(fixture.created, ['node_sessions', 'node_jobs', 'customer_consent_events', 'campaign_runs', 'campaign_recipients']);
 });
 
 test('missing application schema blocks migration before creating tables', async () => {

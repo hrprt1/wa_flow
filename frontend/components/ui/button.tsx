@@ -13,4 +13,3 @@ const buttonVariants = cva('inline-flex shrink-0 items-center justify-center gap
 export function Button({ className, variant, size, ...props }: ComponentProps<'button'> & VariantProps<typeof buttonVariants>) {
   return <button data-slot="button" className={cn(buttonVariants({ variant, size, className }))} {...props} />;
 }
-export { buttonVariants };

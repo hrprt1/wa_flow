@@ -50,6 +50,9 @@ export class WorkspaceController {
       body,
     );
   }
+  @Post("customers/import") async importCustomers(@Req() req: AppRequest, @Body() body: unknown) {
+    return this.workspace.importCustomers(await this.database.tenant(Number(req.user!.id), true), body);
+  }
   @Post(":resource") async store(
     @Req() req: AppRequest,
     @Param("resource") resource: string,

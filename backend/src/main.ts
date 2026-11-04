@@ -15,9 +15,10 @@ import { ApiExceptionFilter } from './common/exception.filter';
 import { AuthModule } from './auth/auth.module';
 import { WorkspaceModule } from './workspace/workspace.module';
 import { ProvidersModule } from './providers/providers.module';
+import { CampaignsModule } from './campaigns/campaigns.module';
 import type { AppRequest } from './common/request';
 
-@Module({ imports: [CommonModule, ProvidersModule, AuthModule, WorkspaceModule] })
+@Module({ imports: [CommonModule, ProvidersModule, AuthModule, CampaignsModule, WorkspaceModule] })
 class AppModule {}
 
 export async function bootstrap() {
