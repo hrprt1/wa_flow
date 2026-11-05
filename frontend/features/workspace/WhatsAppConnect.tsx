@@ -1,25 +1,51 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from './api';
 import { parseSignupEvent } from './facebookSignup';
+import { reportError } from '@/lib/form-feedback';
 
 type Signup = { state: string; app_id: string; config_id: string; version: string };
 type Assets = { waba_id: string; phone_number_id: string };
 type Facebook = {
   init(options: { appId: string; version: string; xfbml: boolean; cookie: boolean }): void;
   login(callback: (response: { authResponse?: { code?: string } }) => void, options: Record<string, unknown>): void;
+  __buffer?: unknown;
 };
-declare global { interface Window { FB?: Facebook } }
+declare global { interface Window { FB?: Facebook; fbAsyncInit?: () => void } }
 let sdkPromise: Promise<Facebook> | undefined;
+let sdkReady = false;
+let sdkNeedsReload = false;
 function facebookSdk(): Promise<Facebook> {
-  if (window.FB) return Promise.resolve(window.FB);
+  if (sdkReady && window.FB) return Promise.resolve(window.FB);
   if (sdkPromise) return sdkPromise;
   sdkPromise = new Promise<Facebook>((resolve, reject) => {
+    const previousInit = window.fbAsyncInit;
+    const cleanup = () => {
+      window.clearTimeout(timer);
+      if (window.fbAsyncInit === initialized) window.fbAsyncInit = previousInit;
+    };
+    const initialized = () => {
+      // sdk.js initially exposes buffered stubs. Only fbAsyncInit signals that
+      // FB.login can open its window synchronously from the user's click.
+      if (!window.FB) return;
+      cleanup(); sdkReady = true; resolve(window.FB);
+      previousInit?.();
+    };
+    window.fbAsyncInit = initialized;
     const script = document.createElement('script');
     script.src = 'https://connect.facebook.net/en_US/sdk.js';
     script.async = true;
-    const timer = window.setTimeout(() => { script.remove(); reject(new Error('Facebook could not load. Check your connection or browser content blocker, then retry.')); }, 20000);
-    script.onload = () => { window.clearTimeout(timer); if (window.FB) resolve(window.FB); else reject(new Error('Facebook could not initialize. Please retry.')); };
-    script.onerror = () => { window.clearTimeout(timer); script.remove(); reject(new Error('Facebook could not load. Check your connection or browser content blocker, then retry.')); };
+    const timer = window.setTimeout(() => {
+      cleanup(); script.remove(); sdkNeedsReload = !!window.FB?.__buffer;
+      reject(new Error(sdkNeedsReload
+        ? 'Facebook could not finish loading. Allow connect.facebook.net in your browser or content blocker, then reload this page.'
+        : 'Facebook could not load. Check your connection or browser content blocker, then retry.'));
+    }, 20000);
+    script.onerror = () => { cleanup(); script.remove(); reject(new Error('Facebook could not load. Check your connection or browser content blocker, then retry.')); };
+    // A timed-out load may finish later, or another page may have loaded it.
+    if (window.FB && !window.FB.__buffer) { initialized(); return; }
+    // Reuse an in-flight bootstrap rather than inserting a second copy: Meta
+    // skips initialization when its buffered global already exists.
+    if (window.FB?.__buffer) return;
     document.head.appendChild(script);
   }).catch(error => { sdkPromise = undefined; throw error; });
   return sdkPromise;
@@ -51,7 +77,7 @@ export function WhatsAppConnect({ enabled, demo, connected, refresh }: { enabled
     let timer: number | undefined;
     let expiry: number | undefined;
     setReady(false); setPhase('loading'); setFeedback('Preparing secure Facebook connection…'); setRetrySetup(false);
-    const fail = (message: string) => { if (disposed) return; setPhase('error'); setFeedback(message); };
+    const fail = (message: string) => { if (disposed) return; setPhase('error'); setFeedback(message); reportError(message); };
     const complete = async () => {
       if (disposed || !authorized || !assets || !config || completing) return;
       completing = true; active = false; window.clearTimeout(timer);
@@ -94,6 +120,7 @@ export function WhatsAppConnect({ enabled, demo, connected, refresh }: { enabled
             const code = response.authResponse?.code;
             if (!code) { active = false; window.clearTimeout(timer); fail('Facebook sign-in was cancelled or no authorization was granted. Allow popups and try again.'); return; }
             codeSubmitted = true;
+            setPhase('finishing');
             setFeedback('Facebook approved access. Completing your WhatsApp connection…');
             // Exchange immediately: Meta authorization codes are short lived and assets may arrive later.
             void api('integrations/whatsapp/signup/exchange', 'POST', { state: settings.state, code }).then(() => {
@@ -118,10 +145,12 @@ export function WhatsAppConnect({ enabled, demo, connected, refresh }: { enabled
     <p>Connect your shop through Facebook. No API keys are needed. {connected && 'Connecting again will replace this workspace’s current WhatsApp connection after setup succeeds.'}</p>
     <div className="connection-actions">
     <button type="button" className="primary facebook-connect" disabled={!ready || working || phase === 'connected' || phase === 'error'} onClick={() => launch.current?.()}>{working ? 'Connecting…' : 'Connect WhatsApp with Facebook'}</button>
-    {(phase === 'error' || phase === 'connected') && <button type="button" onClick={() => setGeneration(value => value + 1)}>Start again</button>}
+    {phase === 'opening' && <button type="button" onClick={() => setGeneration(value => value + 1)}>Cancel & start again</button>}
+    {(phase === 'error' || phase === 'connected') && <button type="button" onClick={() => { if (sdkNeedsReload) window.location.reload(); else setGeneration(value => value + 1); }}>{sdkNeedsReload ? 'Reload Facebook connection' : 'Start again'}</button>}
     {retrySetup && <button type="button" onClick={() => finish.current?.()}>Retry connection setup</button>}
     </div>
     <p role="status" aria-live="polite">{feedback}</p>
+    {phase === 'opening' && <p className="info-strip">No Facebook window? Allow popups for this site. If you are using an in-app browser, open this page in Chrome or Edge, then try again.</p>}
     <p className="muted">You may need to verify your phone and add a payment method in Meta. Standard Cloud API onboarding is supported; existing WhatsApp Business mobile-app coexistence requires a separate Meta setup.</p>
   </div>;
 }
