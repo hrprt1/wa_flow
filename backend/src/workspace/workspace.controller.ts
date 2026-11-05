@@ -6,6 +6,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from "@nestjs/common";
@@ -21,12 +22,18 @@ export class WorkspaceController {
     private readonly database: DatabaseService,
     private readonly workspace: WorkspaceService,
   ) {}
-  @Get("workspace") async index(@Req() req: AppRequest) {
+  @Get("workspace") async index(@Req() req: AppRequest, @Query('conversation_id') conversationId?: unknown) {
     return {
       data: await this.workspace.snapshot(
-        await this.database.tenant(Number(req.user!.id)),
+        await this.database.tenant(Number(req.user!.id)), conversationId,
       ),
     };
+  }
+  @Get('customers') async customers(@Req() req: AppRequest, @Query() query: unknown) {
+    return this.workspace.customers(await this.database.tenant(Number(req.user!.id)), query);
+  }
+  @Get('customers/:id/conversation') async customerConversation(@Req() req: AppRequest, @Param('id', ParseIntPipe) id: number) {
+    return this.workspace.customerConversation(await this.database.tenant(Number(req.user!.id)), id);
   }
   @Post("conversations/:id/messages") async message(
     @Req() req: AppRequest,

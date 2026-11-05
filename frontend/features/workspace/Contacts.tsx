@@ -20,7 +20,7 @@ export function ContactImport({ refresh }: { refresh: () => Promise<void> }) {
   return <>
     <button onClick={() => { setError(''); setResult(''); setOpen(true); }}><Upload size={16}/>Import CSV</button>
     {open && <ContactDialog title="Import your customers" close={() => setOpen(false)} busy={busy}>
-      <p>Import up to 100 contacts with international phone numbers. Existing numbers are skipped and their consent stays unchanged.</p>
+      <p>Import up to 10,000 contacts per CSV (5 MB). There is no total contact cap. Existing numbers are skipped and their consent stays unchanged.</p>
       <p className="muted">Use these exact column names. Set opted_in to true only for customers who agreed to WhatsApp marketing.</p>
       <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>name,phone,email,tag,opted_in{'\n'}Priya,+919876543210,priya@example.com,VIP,false</pre>
       <form onSubmit={async e => {
@@ -36,10 +36,10 @@ export function ContactImport({ refresh }: { refresh: () => Promise<void> }) {
           const version = ++fileRead.current;
           const file = e.target.files?.[0]; setCsv(''); if (!file) return;
           setError('');
-          if (file.size > 200_000) { setError('Choose a CSV smaller than 200 KB.'); e.target.value = ''; return; }
+          if (file.size > 5_000_000) { setError('Choose a CSV no larger than 5 MB.'); e.target.value = ''; return; }
           try { const text = await file.text(); if (fileRead.current === version) setCsv(text); } catch { if (fileRead.current === version) setError('Could not read this file.'); }
         }}/></label>
-        <label>Or paste CSV<textarea value={csv} onChange={e => { fileRead.current++; setCsv(e.target.value); }} maxLength={200_000} rows={6} required disabled={busy}/></label>
+        <label>Or paste CSV<textarea name="csv" value={csv} onChange={e => { fileRead.current++; setCsv(e.target.value); }} maxLength={5_000_000} rows={6} required disabled={busy}/></label>
         <label>Consent source (required for opt-ins)<input name="consent_source" maxLength={255} placeholder="e.g. Store signup form, 4 November 2026" disabled={busy}/></label>
         <small>Keep the original consent evidence. Importing a phone number alone does not grant marketing permission.</small>
         {error && <p className="error-banner" role="alert">{error}</p>}

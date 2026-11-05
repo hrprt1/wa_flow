@@ -35,6 +35,9 @@ export async function bootstrap() {
   express.disable('x-powered-by');
   if(process.env.TRUST_PROXY==='true')express.set('trust proxy','loopback');
   app.use(helmet());
+  const limit=(max:number)=>rateLimit({windowMs:60000,max,standardHeaders:true,legacyHeaders:false,message:{message:'Too many requests. Please try again shortly.'}});
+  // Bound large CSV imports separately; keep other requests and signed webhooks at 1 MB.
+  app.use('/api/v1/customers/import',limit(10),json({limit:'32mb'}));
   // Nest captures the raw bytes for provider HMAC verification before JSON parsing.
   app.use(json({limit:'1mb',verify:(req:any,_res,buffer)=>{req.rawBody=Buffer.from(buffer);}}));
   app.use(urlencoded({extended:false,limit:'1mb'}));
@@ -55,7 +58,6 @@ export async function bootstrap() {
     }
     next();
   });
-  const limit=(max:number)=>rateLimit({windowMs:60000,max,standardHeaders:true,legacyHeaders:false,message:{message:'Too many requests. Please try again shortly.'}});
   app.use('/api/v1/auth',limit(10));
   app.use('/api/v1/integrations/whatsapp/signup',limit(10));
   app.use('/api/v1/integrations/ai/test',limit(5));

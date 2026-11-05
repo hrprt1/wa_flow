@@ -12,7 +12,7 @@ Ordered delivery gates, not completed milestones. Current Next/Nest/MySQL implem
 | Reporting/operations | Reconciled metrics, billing view, platform audit/admin | Role/financial-state checks and safe uncertain-send operations |
 | Production release | Usability, monitoring, privacy/retention and restore | Full permitted first-campaign journey and assigned operating owners |
 
-The current 100-contact static-template flow is a bounded first implementation. MySQL is approved; no PostgreSQL conversion is required. Keep the working Knex adapter. Redis/BullMQ integration remains a separate delivery stage. Expand import pagination, saved segments and supported template components after the core reliability gates.
+Contact storage is uncapped, contact lists use server-side pagination/search, imports accept 10,000 rows / 5 MB, and static-template campaigns use the remaining subscription message allowance. MySQL is approved; no PostgreSQL conversion is required. Keep the working Knex adapter. Redis/BullMQ integration remains a separate delivery stage. Expand saved segments and supported template components after the core reliability gates.
 
 External dependencies include Meta app review/permissions, eligible verified business and numbers, SMTP, billing account, DNS/TLS and a worker cutover window. Political campaigning is excluded by provider policy; regulated industries need current eligibility review. Dates depend on actual schema/provider approval and staging evidence.
 

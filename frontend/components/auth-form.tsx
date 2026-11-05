@@ -6,7 +6,7 @@ import { ArrowRight, Sparkles } from 'lucide-react';
 import AuthLayout from './auth-layout';
 import Field from './field';
 import { Button } from './ui/button';
-import { api, ApiError } from '@/features/workspace/api';
+import { api } from '@/features/workspace/api';
 type Mode = 'login' | 'register' | 'forgot' | 'reset';
 export default function AuthForm({ mode, token = '', initialEmail = '' }: { mode: Mode; token?: string; initialEmail?: string }) {
  const router = useRouter();
@@ -14,7 +14,6 @@ export default function AuthForm({ mode, token = '', initialEmail = '' }: { mode
  const [busy, setBusy] = useState(false);
  const [ready, setReady] = useState(false);
  const [demo, setDemo] = useState(false);
- const [errors, setErrors] = useState<Record<string, string[]>>({});
  const [error, setError] = useState('');
  const [status, setStatus] = useState('');
  async function bootstrap() {
@@ -28,16 +27,16 @@ export default function AuthForm({ mode, token = '', initialEmail = '' }: { mode
  const buttons = { login: 'Sign in', register: 'Create account', forgot: 'Send password reset link', reset: 'Reset password' };
  const paths = { login: 'login', register: 'register', forgot: 'forgot-password', reset: 'reset-password' };
  function field(name: 'name' | 'business' | 'email' | 'password' | 'password_confirmation', label: string, type = 'text') {
-  return <Field name={name} label={label} type={type} required value={data[name]} onChange={e => setData(previous => ({ ...previous, [name]: e.target.value }))} error={errors[name]?.join(' ')} minLength={type === 'password' && mode !== 'login' ? 10 : undefined} maxLength={name === 'name' || name === 'business' ? 100 : undefined} autoComplete={name === 'password' ? (mode === 'login' ? 'current-password' : 'new-password') : name === 'password_confirmation' ? 'new-password' : name === 'business' ? 'organization' : name === 'email' ? 'username' : 'name'} />;
+  return <Field name={name} label={label} type={type} required value={data[name]} onChange={e => setData(previous => ({ ...previous, [name]: e.target.value }))} minLength={type === 'password' && mode !== 'login' ? 10 : undefined} maxLength={name === 'name' || name === 'business' ? 100 : undefined} autoComplete={name === 'password' ? (mode === 'login' ? 'current-password' : 'new-password') : name === 'password_confirmation' ? 'new-password' : name === 'business' ? 'organization' : name === 'email' ? 'username' : 'name'} />;
  }
  async function submit(event: FormEvent) {
-  event.preventDefault(); setBusy(true); setError(''); setErrors({}); setStatus('');
+  event.preventDefault(); setBusy(true); setError(''); setStatus('');
   try {
    await api(`auth/${paths[mode]}`, 'POST', mode === 'forgot' ? { email: data.email } : mode === 'reset' ? { email: data.email, token, password: data.password, password_confirmation: data.password_confirmation } : data);
    if (mode === 'forgot') setStatus('If an account exists for that address, a password reset link has been sent.');
    else if (mode === 'reset') { setStatus('Your password has been reset. You can now sign in.'); setData(previous => ({ ...previous, password: '', password_confirmation: '' })); }
    else router.replace('/app/');
-  } catch (e) { setError((e as Error).message); if (e instanceof ApiError) setErrors(e.errors); }
+  } catch (e) { setError((e as Error).message); }
   finally { setBusy(false); }
  }
  async function openDemo() {

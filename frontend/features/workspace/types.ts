@@ -21,6 +21,7 @@ export type IntegrationStatus = {
   meta_configured: boolean; ai_configured: boolean; billing_configured: boolean; billing_test_mode: boolean;
   subscription: { provider_id: string | null; plan: string; status: string; current_end: string | null; cancel_scheduled: boolean } | null;
   limits: { plan: string; messages: number; ai_requests: number; tokens: number };
+  message_allowance?: { plan: string; period: string; limit: number; used: number; reserved: number; remaining: number };
   usage: { messages: number; ai_requests: number; input_tokens: number; output_tokens: number; reserved_tokens: number } | null;
   plans: { id: string; name: string; price_paise: number; messages: number; ai_requests: number; tokens: number; configured: boolean }[];
   payments: { id: number; provider_id: string; amount_paise: number; currency: string; status: string; created_at: string }[];

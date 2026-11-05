@@ -24,7 +24,8 @@ export class QueueService implements OnModuleInit,OnModuleDestroy {
         if(claimed&&!retryWebhook)await this.failureHandlers.get(row.kind)?.(typeof row.payload==='string'?JSON.parse(row.payload):row.payload,new Error('worker_interrupted'));
       }
       const job=await this.database.db.transaction(async trx=>{
-        const row=await trx('node_jobs').where('status','pending').andWhere('available_at','<=',new Date()).whereIn('kind',[...this.handlers.keys()]).orderBy('id').forUpdate().skipLocked().first();
+        // Deliver prepared messages and apply opt-outs before expanding another bulk recipient.
+        const row=await trx('node_jobs').where('status','pending').andWhere('available_at','<=',new Date()).whereIn('kind',[...this.handlers.keys()]).orderByRaw("CASE WHEN kind = 'process-webhook' THEN 0 WHEN kind = 'send-whatsapp' THEN 1 WHEN kind = 'campaign-recipient' THEN 3 ELSE 2 END").orderBy('id').forUpdate().skipLocked().first();
         if(!row)return null;const owner=randomUUID();await trx('node_jobs').where('id',row.id).update({status:'processing',locked_at:new Date(),lock_owner:owner,attempts:Number(row.attempts)+1});return {...row,lock_owner:owner};
       });
       if(!job)return;

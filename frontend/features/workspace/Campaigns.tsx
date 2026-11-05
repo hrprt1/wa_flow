@@ -10,6 +10,7 @@ type Preview = {
   eligible: number;
   excluded: number;
   templates: { name: string; language: string; body: string }[];
+  allowance: { plan: string; period: string; limit: number; used: number; reserved: number; remaining: number };
 };
 type CampaignStatus = {
   run: null | {
@@ -48,7 +49,7 @@ export function Campaigns({ w, refresh }: { w: Workspace; refresh: () => Promise
         <div className="tile-top"><span className="tile-icon peach"><Megaphone size={23} /></span><span className="badge amber">Message draft</span></div>
         <h2>{item.name}</h2>
         <p>{item.body}</p>
-        <div className="tile-footer"><span><Users size={15} />{item.audience}</span><span>{w.customers.filter((customer) => !!customer.opted_in && (item.audience === "All opted-in customers" || customer.tag === item.audience)).length} opted in</span></div>
+        <div className="tile-footer"><span><Users size={15} />{item.audience}</span><span>Review full audience</span></div>
         <button className="campaign-review-button" aria-expanded={selected === item.id} aria-controls={`campaign-details-${item.id}`} onClick={() => setSelected(item.id)}>
           {item.status === "draft" ? "Review campaign" : "View campaign & delivery"}
         </button>
@@ -74,6 +75,7 @@ function CampaignDetails({ campaign, connected, refresh }: { campaign: Campaign;
   const [cancelConfirm, setCancelConfirm] = useState(false);
   const [retry, setRetry] = useState(0);
   const selected = preview?.templates.find((template) => `${template.name}:${template.language}` === templateKey);
+  const exceedsAllowance = !!preview && preview.eligible > preview.allowance.remaining;
   const active = !!status?.run && ["scheduled", "running", "processing"].includes(status.run.status);
   // Dispatch can finish before delivery/read webhooks arrive. Keep their counts live.
   const shouldPoll = active || Object.entries(status?.counts || {}).some(([name, count]) => count > 0 && ["queued", "sending", "sent", "delivered", "uncertain"].includes(name));
@@ -87,13 +89,21 @@ function CampaignDetails({ campaign, connected, refresh }: { campaign: Campaign;
     let disposed = false;
     setLoading(true);
     setError("");
+    setPreview(null);
+    setConfirmed(false);
     async function load() {
       try {
         const result = await api<CampaignStatus>(`campaigns/${campaign.id}/status`);
         if (disposed) return;
         setStatus(result);
         if (!result.run && connected) {
-          const audience = await api<Preview>(`campaigns/${campaign.id}/preview`, "POST", {});
+          let scheduled_at: string | undefined;
+          if (timing === 'later') {
+            const date = new Date(scheduledAt);
+            if (!scheduledAt || !Number.isFinite(date.getTime()) || date.getTime() <= Date.now()) return;
+            scheduled_at = date.toISOString();
+          }
+          const audience = await api<Preview>(`campaigns/${campaign.id}/preview`, "POST", { scheduled_at });
           if (!disposed) setPreview(audience);
         }
       } catch (cause) {
@@ -104,7 +114,7 @@ function CampaignDetails({ campaign, connected, refresh }: { campaign: Campaign;
     }
     void load();
     return () => { disposed = true; };
-  }, [campaign.id, connected, retry]);
+  }, [campaign.id, connected, retry, timing, scheduledAt]);
 
   useEffect(() => {
     if (!shouldPoll) return;
@@ -124,7 +134,7 @@ function CampaignDetails({ campaign, connected, refresh }: { campaign: Campaign;
   }, [campaign.id, shouldPoll]);
 
   async function schedule() {
-    if (!selected || !confirmed || busy) return;
+    if (!selected || !confirmed || busy || exceedsAllowance) return;
     setBusy(true); setError(""); setNotice("");
     try {
       let timestamp: string | undefined;
@@ -167,6 +177,7 @@ function CampaignDetails({ campaign, connected, refresh }: { campaign: Campaign;
     <div className="campaign-detail-heading"><div><span className="muted">CAMPAIGN REVIEW</span><h2>{campaign.name}</h2></div><button disabled={busy || loading} onClick={() => setRetry((value) => value + 1)}><RefreshCw size={15} />Refresh</button></div>
     {error && <div className="error-banner" role="alert">{error}</div>}
     {notice && <div className="info-strip" role="status">{notice}</div>}
+    {!status?.run && connected && <div className="form-row"><label>When to send<select disabled={busy} value={timing} onChange={(event) => setTiming(event.target.value)}><option value="now">Send now</option><option value="later">Schedule for later</option></select></label>{timing === "later" && <label>Date and time<input type="datetime-local" required disabled={busy} value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} /><small>Within the next 90 days, in your device’s local time zone.</small></label>}</div>}
     {loading ? <p role="status">Checking campaign and audience…</p> : status?.run ? <>
       <span className="badge">{status.run.status}</span>
       <p><CalendarClock size={15} /> {dateLabel(status.run.scheduled_at)} · {status.run.template_name} ({status.run.language})</p>
@@ -176,15 +187,16 @@ function CampaignDetails({ campaign, connected, refresh }: { campaign: Campaign;
       {active && <>{!cancelConfirm ? <button disabled={busy} onClick={() => setCancelConfirm(true)}>Cancel remaining messages</button> : <div className="campaign-cancel"><p>Cancel messages that have not started sending? Messages already sent cannot be recalled.</p><button disabled={busy} onClick={cancel}>{busy ? "Cancelling…" : "Confirm cancellation"}</button><button disabled={busy} onClick={() => setCancelConfirm(false)}>Keep campaign</button></div>}</>}
     </> : !connected ? <p>Connect WhatsApp from Settings to review approved templates and schedule this campaign.</p> : preview ? <>
       <div className="info-strip"><Users size={19} /><span><strong>{preview.eligible} eligible recipients</strong> · {preview.excluded} excluded from this audience. Customers who opt out before dispatch will be skipped.</span></div>
+      <div className="info-strip"><span><strong>{preview.allowance.plan} plan · {preview.allowance.remaining.toLocaleString()} messages available</strong> for {preview.allowance.period} (UTC). Allowance: {preview.allowance.limit.toLocaleString()} · Used/booked: {preview.allowance.used.toLocaleString()} · Pending campaign reservations: {preview.allowance.reserved.toLocaleString()}.</span></div>
+      {exceedsAllowance && <p className="error-banner" role="alert">This audience exceeds your remaining message allowance. Choose a smaller audience or <a href="/app/billing">upgrade your plan</a>.</p>}
       {!preview.templates.length ? <p>No supported approved templates found. Create a text template in Meta and wait for approval, then refresh here. Campaigns currently support templates without variables, buttons or media.</p> : <form onSubmit={(event) => { event.preventDefault(); void schedule(); }}>
         <label>Approved WhatsApp template<select required disabled={busy} value={templateKey} onChange={(event) => { setTemplateKey(event.target.value); setConfirmed(false); }}><option value="">Choose a template</option>{preview.templates.map((template) => <option value={`${template.name}:${template.language}`} key={`${template.name}:${template.language}`}>{template.name} ({template.language})</option>)}</select></label>
         <p className="muted">Your draft is a message idea. WhatsApp will send the approved template shown below.</p>
         {selected && <div className="campaign-message-preview"><strong>Message customers will receive</strong><p>{selected.body}</p></div>}
-        <div className="form-row"><label>When to send<select disabled={busy} value={timing} onChange={(event) => setTiming(event.target.value)}><option value="now">Send now</option><option value="later">Schedule for later</option></select></label>{timing === "later" && <label>Date and time<input type="datetime-local" required disabled={busy} value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} /><small>Within the next 90 days, in your device’s local time zone.</small></label>}</div>
         <label className="checkbox-label campaign-attestation"><input type="checkbox" required checked={confirmed} disabled={busy} onChange={(event) => setConfirmed(event.target.checked)} />I confirm these customers agreed to receive this marketing and this campaign follows WhatsApp policies and applicable laws.</label>
-        <button className="primary" disabled={busy || !selected || !confirmed || preview.eligible === 0}>{busy ? "Scheduling…" : timing === "later" ? "Schedule campaign" : `Send to ${preview.eligible} customers`}</button>
-        <p className="muted">Your plan’s message allowance applies. Only the selected, opted-in audience is included; newly added customers will not be added to this run.</p>
+        <button className="primary" disabled={busy || !selected || !confirmed || preview.eligible === 0 || exceedsAllowance}>{busy ? "Scheduling…" : timing === "later" ? "Schedule campaign" : `Send to ${preview.eligible} customers`}</button>
+        <p className="muted">Scheduling reserves your plan’s message allowance. Future sends recheck subscription access; scheduling does not guarantee renewal. Only the reviewed, opted-in audience is included.</p>
       </form>}
-    </> : <p>Campaign review is unavailable. Use Refresh to try again.</p>}
+    </> : <p>{timing === "later" && !scheduledAt ? "Choose a future date and time to check your allowance." : "Campaign review is unavailable. Choose a valid future time or use Refresh to try again."}</p>}
   </section>;
 }

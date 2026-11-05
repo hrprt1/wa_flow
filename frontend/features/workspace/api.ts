@@ -1,3 +1,4 @@
+import { currentSubmittingForm, reportError } from '@/lib/form-feedback';
 let csrf = "";
 export class ApiError extends Error { constructor(message: string, public errors: Record<string, string[]> = {}, public status = 500) { super(message); } }
 export async function api<T>(
@@ -5,6 +6,8 @@ export async function api<T>(
   method = "GET",
   body?: unknown,
 ): Promise<T> {
+  const form = currentSubmittingForm();
+  try {
   const response = await fetch(`/api/v1/${path}`, {
     method,
     credentials: "same-origin",
@@ -27,5 +30,10 @@ export async function api<T>(
     );
   if (payload.data?.csrf) csrf = payload.data.csrf;
   return payload.data;
+  } catch (error) {
+    const cause = error instanceof ApiError ? error : new ApiError('Unable to reach the server. Check your connection and try again.');
+    reportError(cause.message, cause.errors, form);
+    throw cause;
+  }
 }
 

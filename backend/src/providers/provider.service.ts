@@ -82,21 +82,43 @@ export class ProviderService implements OnModuleInit, OnModuleDestroy {
             tokens: 0
         };
     }
-    async reserve(id: number, kind: "messages" | "ai_requests", tokens = 0, tx?: Knex.Transaction): Promise<number> {
+    async messageAllowance(id: number, db: Knex | Knex.Transaction = this.db, scheduledAt = new Date(), excludeRecipientId?: number) {
+        const period = scheduledAt.toISOString().slice(0, 7);
+        const start = new Date(`${period}-01T00:00:00.000Z`);
+        const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1));
+        const limits = await this.limits(id, db);
+        const usage = await db('usage_months').where({ business_id: id, month: period }).first();
+        const pending = db('campaign_recipients as r')
+            .join('campaign_runs as c', function () { this.on('c.id', '=', 'r.run_id').andOn('c.business_id', '=', 'r.business_id'); })
+            .where({ 'r.business_id': id, 'r.status': 'pending' })
+            .whereNot('c.status', 'cancelled').where('c.scheduled_at', '<', end);
+        // Current-month allowance also covers older jobs still waiting for dispatch.
+        if (period !== month()) pending.where('c.scheduled_at', '>=', start);
+        if (excludeRecipientId !== undefined) pending.whereNot('r.id', excludeRecipientId);
+        const held = await pending.count({ count: '*' }).first();
+        const limit = Number(limits.messages), used = Number(usage?.messages || 0), reserved = Number(held?.count || 0);
+        return { plan: String(limits.plan), period, limit, used, reserved, remaining: Math.max(0, limit - used - reserved) };
+    }
+    async reserve(id: number, kind: "messages" | "ai_requests", tokens = 0, tx?: Knex.Transaction, campaignRecipientId?: number): Promise<number> {
         const action = async (db: Knex.Transaction) => {
             await db("businesses").where({
                 id
             }).forUpdate().first();
+            const reservedAt = new Date(), period = reservedAt.toISOString().slice(0, 7);
             const limit = await this.limits(id, db);
             await db("usage_months").insert({
                 business_id: id,
-                month: month()
+                month: period
             }).onConflict(["business_id", "month"]).ignore();
             const row = await db("usage_months").where({
                 business_id: id,
-                month: month()
+                month: period
             }).first();
             requireThat(Number(row[kind]) < limit[kind] && (!tokens || Number(row.input_tokens) + Number(row.output_tokens) + Number(row.reserved_tokens) + tokens <= limit.tokens), "Your subscription or monthly usage limit prevents this action.");
+            if (kind === 'messages') {
+                const allowance = await this.messageAllowance(id, db, reservedAt, campaignRecipientId);
+                requireThat(allowance.remaining > 0, 'Your remaining message allowance is reserved by scheduled campaigns or has been used.');
+            }
             await db("usage_months").where({
                 id: row.id
             }).increment(kind, 1).increment("reserved_tokens", tokens);
@@ -124,6 +146,7 @@ export class ProviderService implements OnModuleInit, OnModuleDestroy {
                 business_id: id
             }).first() || null,
             limits: await this.limits(id),
+            message_allowance: await this.messageAllowance(id),
             usage: await this.db("usage_months").where({
                 business_id: id,
                 month: month()

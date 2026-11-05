@@ -44,6 +44,6 @@ Retain the approved MySQL database and Knex query builder. Redis/BullMQ remains 
 
 Next.js 16/React 19 and NestJS 11 already exist. The executable runtime uses MySQL/Knex, MySQL sessions and node_jobs, with Redis/BullMQ not yet integrated. Existing source includes authentication, tenant-scoped workspaces, Embedded Signup, individual approved-template sends, signed webhooks, inbox/AI/catalogue features and Razorpay flows. Configured services and live staging acceptance remain necessary.
 
-This delivery extends the marketing flow with bounded CSV import/permission evidence and scheduled static-template campaigns; [API.md](API.md) documents those contracts. It does not establish full saved segmentation, general template components, scalable imports, complete platform administration or Redis/BullMQ integration.
+This delivery extends the marketing flow with bounded CSV import/permission evidence and scheduled static-template campaigns; [API.md](API.md) documents those contracts. It includes paginated contacts, batched imports and subscription-limited bulk audiences. It does not establish full saved segmentation, general template components, complete platform administration or Redis/BullMQ integration.
 
 A production release needs the complete permitted-campaign journey against staging providers, tenant/role/consent regressions, database restore/cutover rehearsal and assigned monitoring owners. Builds alone do not satisfy release acceptance. Defer mobile apps, omnichannel messaging, visual workflow engines, autonomous financial actions and enterprise SSO.

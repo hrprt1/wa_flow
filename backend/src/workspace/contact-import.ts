@@ -1,6 +1,9 @@
 import { UnprocessableEntityException } from '@nestjs/common';
 import { z } from 'zod';
 
+export const MAX_CONTACT_IMPORT_ROWS = 10_000;
+export const MAX_CONTACT_IMPORT_BYTES = 5_000_000;
+
 export const consentFields = {
   opted_in: z.boolean().default(false),
   consent_source: z.string().trim().max(255).optional(),
@@ -10,8 +13,8 @@ export const hasConsentEvidence = (value: { opted_in?: boolean; consent_source?:
 
 /** Small, bounded RFC 4180 reader. No spreadsheet formulas are evaluated. */
 export function parseContactsCsv(csv: string) {
-  if (Buffer.byteLength(csv, 'utf8') > 200_000)
-    throw new UnprocessableEntityException('CSV must be smaller than 200 KB.');
+  if (Buffer.byteLength(csv, 'utf8') > MAX_CONTACT_IMPORT_BYTES)
+    throw new UnprocessableEntityException('CSV must be no larger than 5 MB.');
   const rows: string[][] = [];
   let row: string[] = [], field = '', quoted = false, closed = false;
   const fail = () => { throw new UnprocessableEntityException('Invalid CSV quoting. Use a comma-separated UTF-8 file.'); };
@@ -32,7 +35,7 @@ export function parseContactsCsv(csv: string) {
     else if (char === '\n' || char === '\r') {
       if (char === '\r' && csv[i + 1] === '\n') i++;
       line();
-      if (rows.length > 101) throw new UnprocessableEntityException('Import up to 100 contacts at a time.');
+      if (rows.length > MAX_CONTACT_IMPORT_ROWS + 1) throw new UnprocessableEntityException('Import up to 10,000 contacts per file.');
     } else {
       if (closed) fail();
       field += char;
@@ -40,8 +43,8 @@ export function parseContactsCsv(csv: string) {
   }
   if (quoted) fail();
   line();
-  if (rows.length < 2 || rows.length > 101)
-    throw new UnprocessableEntityException('Provide a header and between 1 and 100 contacts.');
+  if (rows.length < 2 || rows.length > MAX_CONTACT_IMPORT_ROWS + 1)
+    throw new UnprocessableEntityException('Provide a header and between 1 and 10,000 contacts.');
   const headers = rows.shift()!.map(v => v.trim().toLowerCase());
   const allowed = ['name', 'phone', 'email', 'tag', 'opted_in'];
   if (new Set(headers).size !== headers.length || headers.some(v => !allowed.includes(v)) || !headers.includes('name') || !headers.includes('phone'))

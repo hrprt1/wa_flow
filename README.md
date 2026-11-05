@@ -10,8 +10,12 @@ immediate or future scheduling, cancellation, and per-recipient delivery counts.
 Run `npm run db:migrate` before using these additions: it adds consent history,
 campaign runs and campaign recipients alongside the existing runtime tables.
 Existing contacts and campaign drafts are preserved. Each draft supports one run;
-create another draft to send another campaign. Contact sections remain capped at
-100 records. Template variables, buttons and media are excluded from campaign sends.
+create another draft to send another campaign. Contact storage has no fixed cap;
+the customer list uses server-side pagination and search. CSV imports accept up to
+10,000 contacts / 5 MB per file, with batched writes and duplicate skipping.
+Campaign audiences use the whole matching contact set and must fit the remaining
+monthly plan allowance (trial 100, Starter 1,000, Business 5,000 messages).
+Template variables, buttons and media are excluded from campaign sends.
 
 CSV headers are `name,phone,email,tag,opted_in`; only name and phone are required.
 Use E.164 phones such as `+919876543210`, and literal `true` or `false` consent.
@@ -86,6 +90,15 @@ output directory `.next`, and `npm start` as the start command. From the reposit
 root, use `npm run build:web` and `npm run start:web`. Install workspace dependencies
 from the repository root with `npm ci`, including build-time dev dependencies.
 Use Node.js 22.12+ or 24.
+
+On Windows, run dependency installation and production builds from a normal
+terminal with write access to the workspace. If a restricted execution sandbox
+reports `EPERM` while Next creates `.next` directories, run the build outside that
+sandbox. This environment required unrestricted execution for standalone tracing.
+If TypeScript reports missing standard libraries or installed type packages,
+restore the lockfile-pinned dependencies with `npm ci` from the repository root,
+then run `npm run build:web` again. Type checking and standalone dependency checks
+remain enabled.
 
 The frontend build traces dependencies from the repository root and copies shared
 standalone dependencies beside the generated `server.js`. This keeps `next` and

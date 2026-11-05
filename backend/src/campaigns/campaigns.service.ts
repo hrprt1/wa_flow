@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { DatabaseService } from '../common/database.service';
 import { QueueService } from '../common/queue.service';
 import { ProviderService } from '../providers/provider.service';
-import { month, requireThat, Row } from '../providers/helpers';
+import { requireThat, Row } from '../providers/helpers';
 import { validate } from '../auth/validation';
 
 export const scheduleSchema = z.object({
@@ -12,6 +12,8 @@ export const scheduleSchema = z.object({
   scheduled_at: z.iso.datetime({ offset: true }).optional(),
   consent_confirmed: z.literal(true),
 });
+export const previewSchema = z.object({ scheduled_at: z.iso.datetime({ offset: true }).optional() });
+const RECIPIENT_BATCH_SIZE = 250;
 
 export function staticTemplates(templates: Row[]) {
   return templates.filter(t => t.status === 'APPROVED' && Array.isArray(t.components)
@@ -40,11 +42,13 @@ export class CampaignsService implements OnModuleInit {
     if (audience !== 'All opted-in customers') query.where('tag', audience);
     return query;
   }
-  async preview(businessId: number, id: number) {
+  async preview(businessId: number, id: number, body: unknown = {}) {
+    const data = validate(previewSchema, body);
     const campaign = await this.campaign(businessId, id);
-    const customers = await this.audience(businessId, campaign.audience).select('opted_in').limit(101);
-    const eligible = customers.filter(c => !!Number(c.opted_in)).length;
-    return { eligible, excluded: customers.length - eligible, templates: staticTemplates(await this.providers.templates(businessId)) };
+    const rows: Row[] = await this.audience(businessId, campaign.audience).select('opted_in').count({ count: '*' }).groupBy('opted_in');
+    const eligible = rows.filter(c => !!Number(c.opted_in)).reduce((sum, c) => sum + Number(c.count), 0);
+    const total = rows.reduce((sum, c) => sum + Number(c.count), 0);
+    return { eligible, excluded: total - eligible, templates: staticTemplates(await this.providers.templates(businessId)), allowance: await this.providers.messageAllowance(businessId, this.db, data.scheduled_at ? new Date(data.scheduled_at) : new Date()) };
   }
   async schedule(businessId: number, id: number, body: unknown) {
     const data = validate(scheduleSchema, body);
@@ -60,28 +64,34 @@ export class CampaignsService implements OnModuleInit {
       requireThat(!await tx('campaign_runs').where({ business_id: businessId, campaign_id: id }).first(), 'This draft has already been scheduled. Create a new draft for another campaign.', 409);
       const query = tx('customers').where({ business_id: businessId, opted_in: true });
       if (campaign.audience !== 'All opted-in customers') query.where('tag', campaign.audience);
-      const customers = await query.orderBy('id').limit(101);
-      requireThat(customers.length > 0 && customers.length <= 100, 'Choose an audience with 1 to 100 opted-in contacts.');
-      const limits = await this.providers.limits(businessId, tx);
-      const usage = await tx('usage_months').where({ business_id: businessId, month: month() }).first();
-      requireThat(customers.length <= Number(limits.messages) - Number(usage?.messages || 0), 'Your remaining monthly message allowance is too small for this audience.');
+      const count = await query.clone().count({ count: '*' }).first();
+      const recipients = Number(count?.count || 0);
+      requireThat(recipients > 0, 'Choose an audience with opted-in contacts.');
+      const allowance = await this.providers.messageAllowance(businessId, tx, scheduledAt);
+      requireThat(recipients <= allowance.remaining, `This audience has ${recipients} recipients, but your ${allowance.plan} plan has ${allowance.remaining} messages available for ${allowance.period}. Reduce the audience or upgrade your plan.`);
       const now = new Date();
       const [runId] = await tx('campaign_runs').insert({ business_id: businessId, campaign_id: id, template_name: template.name, language: template.language, template_body: template.body, scheduled_at: scheduledAt, status: 'scheduled', created_at: now, updated_at: now });
-      for (const [index, customer] of customers.entries()) {
-        const [recipientId] = await tx('campaign_recipients').insert({ business_id: businessId, run_id: runId, customer_id: customer.id, status: 'pending', created_at: now, updated_at: now });
-        await tx('node_jobs').insert({ kind: 'campaign-recipient', payload: JSON.stringify({ recipientId }), available_at: new Date(scheduledAt.getTime() + index * 1000), status: 'pending', attempts: 0, created_at: now });
+      let after = 0, offset = 0;
+      while (true) {
+        const customers = await query.clone().where('id', '>', after).orderBy('id').limit(RECIPIENT_BATCH_SIZE).select('id');
+        if (!customers.length) break;
+        await tx('campaign_recipients').insert(customers.map(customer => ({ business_id: businessId, run_id: runId, customer_id: customer.id, status: 'pending', created_at: now, updated_at: now })));
+        const batch = await tx('campaign_recipients').where({ business_id: businessId, run_id: runId }).whereIn('customer_id', customers.map(c => c.id)).orderBy('customer_id').select('id');
+        await tx('node_jobs').insert(batch.map((recipient, index) => ({ kind: 'campaign-recipient', payload: JSON.stringify({ recipientId: Number(recipient.id) }), available_at: new Date(scheduledAt.getTime() + (offset + index) * 1000), status: 'pending', attempts: 0, created_at: now })));
+        offset += customers.length;
+        after = Number(customers[customers.length - 1].id);
       }
-      return { id: Number(runId), status: 'scheduled', recipients: customers.length };
+      return { id: Number(runId), status: 'scheduled', recipients };
     });
   }
   async status(businessId: number, id: number) {
     await this.campaign(businessId, id);
     const run = await this.db('campaign_runs').where({ business_id: businessId, campaign_id: id }).select('id', 'status', 'scheduled_at', 'template_name', 'language').first();
     if (!run) return { run: null, counts: {} };
-    const rows = await this.db('campaign_recipients as r').leftJoin('messages as m', function () { this.on('m.id', '=', 'r.message_id').andOn('m.business_id', '=', 'r.business_id'); }).where({ 'r.business_id': businessId, 'r.run_id': run.id }).select('r.status', 'm.status as message_status');
+    const rows: Row[] = await this.db('campaign_recipients as r').leftJoin('messages as m', function () { this.on('m.id', '=', 'r.message_id').andOn('m.business_id', '=', 'r.business_id'); }).where({ 'r.business_id': businessId, 'r.run_id': run.id }).select(this.db.raw('COALESCE(m.status, r.status) as status')).count({ count: '*' }).groupByRaw('COALESCE(m.status, r.status)');
     const counts: Record<string, number> = {};
-    for (const row of rows) { const status = row.message_status || row.status; counts[status] = (counts[status] || 0) + 1; }
-    if (run.status !== 'cancelled' && !rows.some(r => ['pending', 'queued', 'sending'].includes(r.message_status || r.status))) run.status = 'complete';
+    for (const row of rows) counts[String(row.status)] = Number(row.count);
+    if (run.status !== 'cancelled' && !['pending', 'queued', 'sending'].some(status => counts[status] > 0)) run.status = 'complete';
     return { run, counts };
   }
   async cancel(businessId: number, id: number) {
@@ -92,8 +102,8 @@ export class CampaignsService implements OnModuleInit {
       requireThat(run, 'No scheduled campaign found.', 404);
       await tx('campaign_runs').where({ id: run.id }).update({ status: 'cancelled', updated_at: new Date() });
       await tx('campaign_recipients').where({ business_id: businessId, run_id: run.id, status: 'pending' }).update({ status: 'cancelled', updated_at: new Date() });
-      const messages = await tx('campaign_recipients').where({ business_id: businessId, run_id: run.id }).whereNotNull('message_id').select('message_id');
-      if (messages.length) await tx('messages').where({ business_id: businessId, status: 'queued' }).whereIn('id', messages.map(m => m.message_id)).update({ status: 'cancelled', updated_at: new Date() });
+      const messages = tx('campaign_recipients').where({ business_id: businessId, run_id: run.id }).whereNotNull('message_id').select('message_id');
+      await tx('messages').where({ business_id: businessId, status: 'queued' }).whereIn('id', messages).update({ status: 'cancelled', updated_at: new Date() });
     });
     return { cancelled: true };
   }
@@ -119,7 +129,7 @@ export class CampaignsService implements OnModuleInit {
         const [id] = await tx('conversations').insert({ business_id: current.business_id, customer_id: current.customer_id, mode: 'human', created_at: new Date(), updated_at: new Date() });
         conversation = { id };
       }
-      await this.providers.reserve(current.business_id, 'messages', 0, tx);
+      await this.providers.reserve(current.business_id, 'messages', 0, tx, recipientId);
       const [messageId] = await tx('messages').insert({ business_id: current.business_id, conversation_id: conversation.id, body: template.body, template_payload: JSON.stringify({ name: template.name, language: { code: template.language } }), direction: 'outbound', status: 'queued', client_key: `campaign:${run.id}:${current.customer_id}`, created_at: new Date(), updated_at: new Date() });
       await tx('campaign_recipients').where({ id: recipientId }).update({ message_id: messageId, status: 'queued', updated_at: new Date() });
       await tx('campaign_runs').where({ id: run.id }).update({ status: 'processing', updated_at: new Date() });

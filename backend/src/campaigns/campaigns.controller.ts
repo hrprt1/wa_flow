@@ -8,8 +8,8 @@ import { CampaignsService } from './campaigns.service';
 @UseGuards(AuthGuard)
 export class CampaignsController {
   constructor(private readonly database: DatabaseService, private readonly campaigns: CampaignsService) {}
-  @Post(':id/preview') async preview(@Req() req: AppRequest, @Param('id', ParseIntPipe) id: number) {
-    return { data: await this.campaigns.preview(await this.database.tenant(Number(req.user!.id), true), id) };
+  @Post(':id/preview') async preview(@Req() req: AppRequest, @Param('id', ParseIntPipe) id: number, @Body() body: unknown) {
+    return { data: await this.campaigns.preview(await this.database.tenant(Number(req.user!.id), true), id, body) };
   }
   @Post(':id/schedule') async schedule(@Req() req: AppRequest, @Param('id', ParseIntPipe) id: number, @Body() body: unknown) {
     return { data: await this.campaigns.schedule(await this.database.tenant(Number(req.user!.id), true), id, body) };

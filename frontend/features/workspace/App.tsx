@@ -6,7 +6,6 @@ import {
   type ReactNode,
 } from "react";
 import {
-  ArrowDownToLine,
   ArrowRight,
   ArrowUpRight,
   BookOpen,
@@ -41,7 +40,7 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useTheme } from "@/lib/theme";
 import { IntegrationSettings, BillingPanel } from "./Integrations";
-import { ContactImport, ContactConsent } from './Contacts';
+import { Customers } from './Customers';
 import { Campaigns } from './Campaigns';
 import type { Conversation, User, Workspace } from "./types";
 
@@ -121,6 +120,8 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<number | null>(null);
+  const selectedConversation = useRef<number | null>(null);
+  selectedConversation.current = selected;
   const [mobile, setMobile] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
@@ -157,7 +158,10 @@ export default function App() {
   const [days, setDays] = useState(14);
 
   async function refresh() {
-    setWorkspace(await api<Workspace>("workspace"));
+    const conversationId = selectedConversation.current;
+    const next = await api<Workspace>(conversationId ? `workspace?conversation_id=${conversationId}` : 'workspace');
+    // An older background response must not discard a conversation just opened from a later contact page.
+    if (selectedConversation.current === conversationId) setWorkspace(next);
   }
   async function session() {
     const data = await api<{ user: User | null; demo_available: boolean }>(
@@ -188,7 +192,7 @@ export default function App() {
   }, [workspace, selected]);
   useEffect(() => {
     if (!user || !workspace?.integrations.whatsapp) return;
-    const timer = setInterval(() => { api<Workspace>("workspace").then(setWorkspace).catch(() => {}); }, 10000);
+    const timer = setInterval(() => { refresh().catch(() => {}); }, 10000);
     return () => clearInterval(timer);
   }, [user?.id, workspace?.integrations.whatsapp?.phone_number_id]);
   async function mutate(
@@ -304,23 +308,13 @@ export default function App() {
     "Knowledge base": ["knowledge", "Add knowledge"],
     Campaigns: ["campaigns", "Create campaign"],
   };
-  function exportCustomers() {
-    const escape = (v: string) =>
-      '"' + (/^[=+\-@\t\r]/.test(v) ? "'" : "") + v.replaceAll('"', '""') + '"';
-    const csv = [
-      "Name,Phone,Status,Tag",
-      ...w.customers.map((c) =>
-        [c.name, c.phone, c.status, c.tag].map(escape).join(","),
-      ),
-    ].join("\r\n");
-    const url = URL.createObjectURL(
-      new Blob([csv], { type: "text/csv;charset=utf-8" }),
-    );
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "waflow-customers.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+  async function openCustomerConversation(customerId: number) {
+    const conversation = await api<{ id: number }>(`customers/${customerId}/conversation`);
+    const next = await api<Workspace>(`workspace?conversation_id=${conversation.id}`);
+    selectedConversation.current = conversation.id;
+    setWorkspace(next);
+    setSelected(conversation.id);
+    navigate('Inbox');
   }
   return (
     <div className="app-shell">
@@ -815,103 +809,7 @@ export default function App() {
               )}
             </div>
           )}
-          {page === "Customers" && (
-            <section className="card">
-              <div className="card-heading">
-                <SearchBox
-                  value={query}
-                  onChange={setQuery}
-                  placeholder="Search names, phones or tags…"
-                />
-                <button onClick={exportCustomers}>
-                  <ArrowDownToLine size={16} />
-                  Export CSV
-                </button>
-                <ContactImport refresh={refresh}/>
-              </div>
-              <div className="table-scroll">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>CUSTOMER</th>
-                      <th>PHONE</th>
-                      <th>RELATIONSHIP</th>
-                      <th>TAG</th>
-                      <th>MARKETING CONSENT</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {w.customers
-                      .filter((c) => filtered(c.name + c.phone + c.tag))
-                      .map((c, i) => (
-                        <tr key={c.id}>
-                          <td>
-                            <div className="person">
-                              <span
-                                className={`avatar ${i % 2 ? "sage" : "peach"}`}
-                              >
-                                {initials(c.name)}
-                              </span>
-                              <strong>{c.name}</strong>
-                            </div>
-                          </td>
-                          <td>{c.phone}</td>
-                          <td>
-                            <select
-                              aria-label={`Status for ${c.name}`}
-                              value={c.status}
-                              disabled={busy}
-                              onChange={(e) =>
-                                mutate(`customers/${c.id}`, "PATCH", {
-                                  status: e.target.value,
-                                })
-                              }
-                            >
-                              <option>New lead</option>
-                              <option>Customer</option>
-                              <option>VIP</option>
-                            </select>
-                          </td>
-                          <td>
-                            <Badge tone={c.tag === "VIP" ? "purple" : "gray"}>
-                              {c.tag}
-                            </Badge>
-                          </td>
-                          <td className="muted">
-                            <ContactConsent customer={c} refresh={refresh}/>
-                          </td>
-                          <td>
-                            <button
-                              className="text-button"
-                              onClick={() => {
-                                const conv = w.conversations.find(
-                                  (v) => v.customer_id === c.id,
-                                );
-                                if (conv) openConversation(conv);
-                              }}
-                            >
-                              Message <ArrowUpRight size={15} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
-              {!w.customers.filter((c) => filtered(c.name + c.phone + c.tag))
-                .length && (
-                <Empty
-                  title="No matching customers"
-                  body="Try another search or add your first customer."
-                />
-              )}
-              <div className="table-footer">
-                {w.customers.length} customers · Up to 100 in this local
-                workspace
-              </div>
-            </section>
-          )}
+          {page === "Customers" && <Customers version={w.metrics.customers} refresh={refresh} openConversation={openCustomerConversation}/>}
           {page === "Automations" && (
             <>
               <div className="info-strip">

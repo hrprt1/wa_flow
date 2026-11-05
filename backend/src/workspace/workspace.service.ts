@@ -9,7 +9,11 @@ import { DatabaseService } from "../common/database.service";
 import { ProviderService } from "../providers/provider.service";
 import { validate } from "../auth/validation";
 import { schemaFor, stores, updates } from "./schemas";
-import { parseContactsCsv } from './contact-import';
+import { MAX_CONTACT_IMPORT_BYTES, parseContactsCsv } from './contact-import';
+
+const positiveId = z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+const contactPageSchema = z.object({ cursor: positiveId.optional(), limit: positiveId.max(100).default(50), q: z.string().trim().max(100).default('') });
+const CONTACT_BATCH_SIZE = 500;
 
 @Injectable()
 export class WorkspaceService {
@@ -17,7 +21,8 @@ export class WorkspaceService {
     private readonly database: DatabaseService,
     private readonly providers: ProviderService,
   ) {}
-  async snapshot(businessId: number) {
+  async snapshot(businessId: number, conversationId?: unknown) {
+    const requestedConversation = validate(positiveId.optional(), conversationId);
     const db = this.database.db;
     const result: any = {
       business: await db("businesses").where({ id: businessId }).first(),
@@ -34,23 +39,34 @@ export class WorkspaceService {
         .where({ business_id: businessId })
         .orderBy("id", "desc")
         .limit(100);
-    result.conversations = await db("conversations")
+    const conversations = db("conversations")
       .join("customers", "customers.id", "conversations.customer_id")
       .where("conversations.business_id", businessId)
+      .where("customers.business_id", businessId)
       .select(
         "conversations.*",
         "customers.name",
         "customers.phone",
         "customers.tag",
       )
-      .orderBy("conversations.updated_at", "desc")
-      .limit(100);
+      .orderBy("conversations.updated_at", "desc");
+    result.conversations = await conversations.clone().limit(100);
+    if (requestedConversation) {
+      const conversation = await conversations.clone().where('conversations.id', requestedConversation).first();
+      if (!conversation) throw new NotFoundException();
+      if (!result.conversations.some((item: { id: number }) => Number(item.id) === requestedConversation)) result.conversations.unshift(conversation);
+    }
     result.messages = (
       await db("messages")
         .where({ business_id: businessId })
         .orderBy("id", "desc")
         .limit(500)
     ).reverse();
+    if (requestedConversation) {
+      const selectedMessages = await db('messages').where({ business_id: businessId, conversation_id: requestedConversation }).orderBy('id', 'desc').limit(100);
+      result.messages = [...new Map([...result.messages, ...selectedMessages].map((message: { id: number }) => [Number(message.id), message])).values()]
+        .sort((left, right) => Number(left.id) - Number(right.id));
+    }
     const count = async (
       table: string,
       filter: Record<string, any> = {},
@@ -82,6 +98,34 @@ export class WorkspaceService {
     return result;
   }
 
+  async customers(businessId: number, query: unknown) {
+    const data = validate(contactPageSchema, query);
+    const matching = this.database.db('customers').where({ business_id: businessId });
+    if (data.q) matching.andWhere(function () {
+      // LOCATE treats %, _ and backslashes as literal search text, not LIKE operators.
+      this.whereRaw('LOCATE(?, ??) > 0', [data.q, 'name'])
+        .orWhereRaw('LOCATE(?, ??) > 0', [data.q, 'phone'])
+        .orWhereRaw('LOCATE(?, ??) > 0', [data.q, 'tag']);
+    });
+    const page = matching.clone();
+    if (data.cursor) page.where('id', '<', data.cursor);
+    const [count, rows] = await Promise.all([
+      matching.clone().count({ count: '*' }).first(),
+      page.select('id', 'name', 'phone', 'email', 'tag', 'status', 'opted_in').orderBy('id', 'desc').limit(data.limit + 1),
+    ]);
+    const items = rows.slice(0, data.limit);
+    return { data: { items, next_cursor: rows.length > data.limit ? Number(items[items.length - 1].id) : null, total: Number(count?.count || 0) } };
+  }
+
+  async customerConversation(businessId: number, customerId: number) {
+    const conversation = await this.database.db('conversations')
+      .join('customers', 'customers.id', 'conversations.customer_id')
+      .where({ 'conversations.business_id': businessId, 'customers.business_id': businessId, 'customers.id': customerId })
+      .select('conversations.id').orderBy('conversations.id', 'desc').first();
+    if (!conversation) throw new NotFoundException();
+    return { data: { id: Number(conversation.id) } };
+  }
+
   async store(businessId: number, resource: string, body: unknown) {
     const data = validate(schemaFor(stores, resource), body) as Record<
       string,
@@ -90,11 +134,9 @@ export class WorkspaceService {
     try {
       const id = await this.database.db.transaction(async (trx) => {
         await trx("businesses").where({ id: businessId }).forUpdate().first();
-        const count = await trx(resource)
-          .where({ business_id: businessId })
-          .count({ count: "*" })
-          .first();
-        if (Number(count?.count) >= 100)
+        const count = resource === 'customers' ? null : await trx(resource)
+          .where({ business_id: businessId }).count({ count: "*" }).first();
+        if (count && Number(count.count) >= 100)
           throw new UnprocessableEntityException(
             "The local workspace supports 100 records per section.",
           );
@@ -163,25 +205,30 @@ export class WorkspaceService {
   }
 
   async importCustomers(businessId: number, body: unknown) {
-    const data = validate(z.object({ csv: z.string().min(1).max(200_000), consent_source: z.string().trim().max(255).optional() }), body);
+    const data = validate(z.object({ csv: z.string().min(1).max(MAX_CONTACT_IMPORT_BYTES), consent_source: z.string().trim().max(255).optional() }), body);
     const contacts = parseContactsCsv(data.csv);
     if (contacts.some(c => c.opted_in) && !data.consent_source)
       throw new UnprocessableEntityException('Record how and when these customers agreed to WhatsApp marketing.');
     return this.database.db.transaction(async trx => {
       await trx('businesses').where({ id: businessId }).forUpdate().first();
-      const existing = await trx('customers').where({ business_id: businessId }).whereIn('phone', contacts.map(c => c.phone)).select('phone');
-      const phones = new Set(existing.map(c => c.phone));
-      const fresh = contacts.filter(c => !phones.has(c.phone));
-      const count = await trx('customers').where({ business_id: businessId }).count({ count: '*' }).first();
-      if (Number(count?.count) + fresh.length > 100)
-        throw new UnprocessableEntityException('This workspace supports 100 contacts. No contacts were imported.');
       const now = new Date();
-      for (const contact of fresh) {
-        const [id] = await trx('customers').insert({ ...contact, business_id: businessId, created_at: now, updated_at: now });
-        await trx('conversations').insert({ business_id: businessId, customer_id: id, created_at: now, updated_at: now });
-        await trx('customer_consent_events').insert({ business_id: businessId, customer_id: id, opted_in: contact.opted_in, source: contact.opted_in ? data.consent_source : 'No marketing consent provided', created_at: now });
+      let imported = 0;
+      for (let offset = 0; offset < contacts.length; offset += CONTACT_BATCH_SIZE) {
+        const batch = contacts.slice(offset, offset + CONTACT_BATCH_SIZE);
+        const existing = await trx('customers').where({ business_id: businessId }).whereIn('phone', batch.map(contact => contact.phone)).select('phone');
+        const existingPhones = new Set(existing.map(contact => contact.phone));
+        const fresh = batch.filter(contact => !existingPhones.has(contact.phone));
+        if (!fresh.length) continue;
+        await trx('customers').insert(fresh.map(contact => ({ ...contact, business_id: businessId, created_at: now, updated_at: now })));
+        // Bulk MySQL insert IDs are not necessarily consecutive; resolve actual IDs by tenant + phone.
+        const inserted = await trx('customers').where({ business_id: businessId }).whereIn('phone', fresh.map(contact => contact.phone)).select('id', 'phone');
+        const ids = new Map(inserted.map(contact => [contact.phone, contact.id]));
+        if (fresh.some(contact => !ids.has(contact.phone))) throw new Error('Imported contact IDs could not be resolved.');
+        await trx('conversations').insert(fresh.map(contact => ({ business_id: businessId, customer_id: ids.get(contact.phone), created_at: now, updated_at: now })));
+        await trx('customer_consent_events').insert(fresh.map(contact => ({ business_id: businessId, customer_id: ids.get(contact.phone), opted_in: contact.opted_in, source: contact.opted_in ? data.consent_source : 'No marketing consent provided', created_at: now })));
+        imported += fresh.length;
       }
-      return { data: { imported: fresh.length, skipped: contacts.length - fresh.length } };
+      return { data: { imported, skipped: contacts.length - imported } };
     });
   }
 

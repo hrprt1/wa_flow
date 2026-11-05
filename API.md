@@ -22,19 +22,21 @@ Success normally wraps data; webhooks return received:true. Errors contain messa
 
 ## Workspace
 
-GET /workspace returns a bounded tenant snapshot. Tenant is derived from membership, currently the user's first membership; explicit workspace selection is a target feature. It is not a full-history export.
+GET /workspace returns a bounded tenant snapshot. Optional conversation_id includes a tenant-owned older conversation and its latest 100 messages. Tenant is derived from membership, currently the user's first membership; explicit workspace selection is a target feature. It is not a full-history export.
 
 POST /:resource supports customers (name, E.164 phone, optional email, tag, optional opted_in and consent_source required if true), products (name,sku,category,price_paise,stock), automations (name,keyword,response), knowledge (title,content), campaigns (name,audience,body). Campaign audience is All opted-in customers, VIP or New. Unknown resources are rejected.
 
 PATCH /:resource/:id supports conversations (open/resolved, ai/human, assignee, unread=0), automations (active), customers (status,tag and marketing permission extension), businesses (name,industry,email). Workspace mutations currently require owner/admin/manager. POST /conversations/:id/messages handles notes/replies; live replies need unique client_key and an open reply window. POST /conversations/:id/simulate is demo behavior.
 
+GET /customers accepts cursor (positive contact ID), limit (1–100, default 50) and q (search text, max 100). It returns data:{items,next_cursor,total}; IDs descend and total reflects the full search. GET /customers/:id/conversation returns the tenant-owned conversation ID for opening older contacts in the inbox.
+
 ## Bounded marketing extension
 
 | Method/path | Payload / behavior |
 |---|---|
-| POST /customers/import | {csv,consent_source?}; required headers name,phone; optional email,tag,opted_in; up to 100 rows and 100 total contacts; source required if any opted_in=true; validate atomically, skip existing duplicates without re-opting them in |
+| POST /customers/import | {csv,consent_source?}; required headers name,phone; optional email,tag,opted_in; up to 10,000 rows / 5 MB per file; no total contact-storage cap; source required if any opted_in=true; validate atomically, skip existing duplicates without re-opting them in |
 | PATCH /customers/:id | opted_in:boolean and consent_source required when granting; permission events persisted in customer_consent_events |
-| POST /campaigns/:id/preview | {}; evaluate permitted audience |
+| POST /campaigns/:id/preview | {scheduled_at?:ISO}; count the full audience and return plan allowance |
 | POST /campaigns/:id/schedule | template_name,language,scheduled_at? (ISO with offset, within 90 days),consent_confirmed:true |
 | POST /campaigns/:id/cancel | {}; stop pending campaign work |
 | GET /campaigns/:id/status | Campaign recipient/outcome status |
@@ -69,7 +71,7 @@ GET /webhooks/whatsapp and /webhooks/whatsapp/:key verify hub.mode, hub.verify_t
 ## Target additions (not implemented by this specification)
 
 - GET/POST /workspaces; POST /workspaces/:id/select; membership management.
-- Paginated GET /customers, GET/PATCH/DELETE /customers/:id, import preview/confirm/error-report operations.
+- GET/DELETE /customers/:id and import preview/confirm/error-report operations.
 - Category-level consent events/preferences, tags and saved segment CRUD/preview.
 - Expanded template synchronization/submission and supported component mapping.
 - Paginated GET /campaigns, campaign test operation, metrics and analytics endpoints.
@@ -78,4 +80,10 @@ GET /webhooks/whatsapp and /webhooks/whatsapp/:key verify hub.mode, hub.verify_t
 Target lists use stable cursors and page size at most 100. Target schedule mutations should support persisted idempotency keys and expected_version; key/content conflicts and concurrent edits return 409. SQL outbox publication follows transaction commit. Report rates with denominators and update times; absent read receipts are not delivery failures. Never accept client business_id, recipient count or calculated allowance as authoritative.
 
 
-Current preview response: data:{eligible,excluded,templates:[{name,language,body}]}. Schedule response: data:{id,status:"scheduled",recipients}. Each draft can be scheduled only once; another attempt returns 409. Status response: data:{run:null,counts:{}} before scheduling, otherwise run contains id,status,scheduled_at,template_name,language and counts groups current recipient/message statuses. Cancel returns data:{cancelled:true}. Preview is bounded and not a full-dataset analytics endpoint. CSV opted_in accepts true/false/empty; empty defaults false, tag defaults New. Files are bounded to 200 KB and duplicate phone rows within one file reject the import. Current permission evidence is operator-supplied source text and recorded timestamp, not independently verified proof.
+Current preview response: data:{eligible,excluded,templates:[{name,language,body}],allowance:{plan,period,limit,used,reserved,remaining}}. Schedule response: data:{id,status:"scheduled",recipients}. Each draft can be scheduled only once; another attempt returns 409. Status response: data:{run:null,counts:{}} before scheduling, otherwise run contains id,status,scheduled_at,template_name,language and counts groups current recipient/message statuses. Cancel returns data:{cancelled:true}. Preview counts the full matching audience in SQL. Scheduling must fit the full audience within remaining allowance; it never silently truncates recipients. CSV opted_in accepts true/false/empty; empty defaults false, tag defaults New. Files are bounded to 5 MB and duplicate phone rows within one file reject the import. Current permission evidence is operator-supplied source text and recorded timestamp, not independently verified proof.
+
+## Campaign allowance accounting
+
+Allowance uses UTC calendar months. Pending recipients reserve message slots in their scheduled month; overdue pending recipients count against the current month. Scheduling and ordinary replies share the tenant lock and cannot spend the same reserved slots. Processing atomically converts a pending reservation into booked usage. Cancellation, skipped consent and terminal recipient failure release pending slots. Already queued messages retain booked usage, including cancelled or uncertain sends; usage is accounted when booked, not when Meta eventually receives it. Future schedules recheck current plan access at dispatch and do not guarantee subscription renewal. Snapshot integrations.message_allowance exposes the current plan/period/limit/used/reserved/remaining values.
+
+The import route allows a 32 MB JSON envelope for escaped CSV; decoded CSV remains limited to 5 MB and 10,000 rows. Other payloads retain their 1 MB limit. Imports have a dedicated request limiter. Campaign recipients/jobs are inserted in 250-row batches; delivery counts use SQL aggregation. Workers prioritize incoming webhooks and outgoing sends before campaign expansion.

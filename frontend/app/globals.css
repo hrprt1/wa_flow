@@ -3,3 +3,9 @@
 @import 'tailwindcss/utilities.css' layer(utilities);
 @import '../styles/workspace.css';
 @source '../**/*.{ts,tsx}';
+.field-error { display: block; color: #d33e45; font-size: 12px; line-height: 1.5; margin-top: 6px; font-weight: 500; }
+input[aria-invalid="true"], textarea[aria-invalid="true"], select[aria-invalid="true"] { border-color: #d33e45; outline-color: #d33e45; }
+.error-toast { position: fixed; right: 20px; bottom: 24px; z-index: 10000; display: flex; align-items: flex-start; gap: 16px; width: max-content; max-width: min(460px, calc(100vw - 40px)); padding: 16px 18px; border: 1px solid #d33e45; border-radius: 12px; background: #fff1f2; color: #881b26; box-shadow: 0 8px 32px #0003; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.error-toast button { flex-shrink: 0; padding: 0 4px; border: 0; background: transparent; color: inherit; font-size: 22px; line-height: 1; cursor: pointer; }
+[data-theme="dark"] .error-toast { background: #351e24; color: #ffc2c9; }
+[data-theme="dark"] .field-error { color: #ff9da7; }
