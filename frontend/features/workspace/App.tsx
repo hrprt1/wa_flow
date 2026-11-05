@@ -113,7 +113,7 @@ export default function App() {
     settings: 'Settings',
     billing: 'Usage & plan',
   };
-  const workspacePage = pageNames[pathname.split('/')[2]] || 'Overview';
+  const workspacePage = pageNames[pathname.split('/')[2]] || 'Overviews';
   const [darkMode, setDarkMode] = useTheme();
   const [user, setUser] = useState<User | null>(null);
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
@@ -273,7 +273,7 @@ export default function App() {
   const current = w.conversations.find((c) => c.id === selected) || w.conversations[0];
   const filtered = (value: string) => value.toLowerCase().includes(query.toLowerCase());
   const pageInfo: Record<Page, [string, string]> = {
-    Overview: [
+    Overviews: [
       'A little overview. A lot of possibility.',
       'Here’s what’s happening with your business today.',
     ],
@@ -338,7 +338,7 @@ export default function App() {
             href="#"
             onClick={(e) => {
               e.preventDefault();
-              navigate('Overview');
+              navigate('Overviews');
             }}
           >
             <div className="brand-icon">
@@ -477,7 +477,7 @@ export default function App() {
           <div className="page-heading">
             <div>
               <div className="eyebrow">
-                {page === 'Overview'
+                {page === 'Overviews'
                   ? `YOUR BUSINESS AT A GLANCE`
                   : `YOUR WORKSPACE / ${page.toUpperCase()}`}
               </div>
@@ -485,7 +485,7 @@ export default function App() {
               <p>{pageInfo[page][1]}</p>
             </div>
             <div className="heading-actions">
-              {page === 'Overview' ? (
+              {page === 'Overviews' ? (
                 <>
                   <select
                     aria-label="Activity range"
@@ -522,7 +522,7 @@ export default function App() {
               ) : null}
             </div>
           </div>
-          {page === 'Overview' && (
+          {page === 'Overviews' && (
             <>
               <section
                 className="card"
