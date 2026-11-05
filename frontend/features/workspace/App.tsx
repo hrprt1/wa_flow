@@ -1,10 +1,5 @@
-"use client";
-import {
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+'use client';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   ArrowRight,
   ArrowUpRight,
@@ -34,64 +29,65 @@ import {
   Workflow,
   X,
   Zap,
-} from "lucide-react";
-import { api } from "./api";
-import { useRouter, usePathname } from "next/navigation";
-import Link from "next/link";
-import { useTheme } from "@/lib/theme";
-import { IntegrationSettings, BillingPanel } from "./Integrations";
+} from 'lucide-react';
+import { api } from './api';
+import { useRouter, usePathname } from 'next/navigation';
+import Link from 'next/link';
+import { useTheme } from '@/lib/theme';
+import { IntegrationSettings, BillingPanel } from './Integrations';
 import { Customers } from './Customers';
 import { Campaigns } from './Campaigns';
-import type { Conversation, User, Workspace } from "./types";
+import type { Conversation, User, Workspace } from './types';
 
 const navigation = [
-  ["Overview", LayoutDashboard],
-  ["Inbox", MessageCircle],
-  ["Customers", Users],
-  ["Automations", Workflow],
-  ["Knowledge base", BookOpen],
-  ["Products", Package],
-  ["Campaigns", Megaphone],
+  ['Overviews', LayoutDashboard],
+  ['Inbox', MessageCircle],
+  ['Customers', Users],
+  ['Automations', Workflow],
+  ['Knowledge base', BookOpen],
+  ['Products', Package],
+  ['Campaigns', Megaphone],
 ] as const;
-type Page = (typeof navigation)[number][0] | "Settings" | "Usage & plan";
+type Page = (typeof navigation)[number][0] | 'Settings' | 'Usage & plan';
 const paths: Record<Page, string> = {
-  Overview: '', Inbox: 'inbox', Customers: 'customers', Automations: 'automations',
-  'Knowledge base': 'knowledge', Products: 'products', Campaigns: 'campaigns',
-  Settings: 'settings', 'Usage & plan': 'billing',
+  Overviews: '',
+  Inbox: 'inbox',
+  Customers: 'customers',
+  Automations: 'automations',
+  'Knowledge base': 'knowledge',
+  Products: 'products',
+  Campaigns: 'campaigns',
+  Settings: 'settings',
+  'Usage & plan': 'billing',
 };
 type Modal =
-  | "customers"
-  | "products"
-  | "automations"
-  | "knowledge"
-  | "campaigns"
-  | "simulate"
-  | "help"
+  | 'customers'
+  | 'products'
+  | 'automations'
+  | 'knowledge'
+  | 'campaigns'
+  | 'simulate'
+  | 'help'
   | null;
 const initials = (name: string) =>
   name
-    .split(" ")
+    .split(' ')
     .slice(0, 2)
     .map((n) => n[0])
-    .join("");
+    .join('');
 const money = (paise: number) =>
-  new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
+  new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
     maximumFractionDigits: 0,
   }).format(paise / 100);
 const time = (value: string) =>
-  new Date(
-    value.includes("T") ? value : value.replace(" ", "T") + "Z",
-  ).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
+  new Date(value.includes('T') ? value : value.replace(' ', 'T') + 'Z').toLocaleTimeString(
+    'en-IN',
+    { hour: 'numeric', minute: '2-digit' },
+  );
 
-function Badge({
-  children,
-  tone = "green",
-}: {
-  children: ReactNode;
-  tone?: string;
-}) {
+function Badge({ children, tone = 'green' }: { children: ReactNode; tone?: string }) {
   return <span className={`badge ${tone}`}>{children}</span>;
 }
 function Empty({ title, body }: { title: string; body: string }) {
@@ -107,18 +103,27 @@ function Empty({ title, body }: { title: string; body: string }) {
 export default function App() {
   const router = useRouter();
   const pathname = usePathname();
-  const pageNames: Record<string, Page> = { inbox: 'Inbox', customers: 'Customers', automations: 'Automations', knowledge: 'Knowledge base', products: 'Products', campaigns: 'Campaigns', settings: 'Settings', billing: 'Usage & plan' };
+  const pageNames: Record<string, Page> = {
+    inbox: 'Inbox',
+    customers: 'Customers',
+    automations: 'Automations',
+    knowledge: 'Knowledge base',
+    products: 'Products',
+    campaigns: 'Campaigns',
+    settings: 'Settings',
+    billing: 'Usage & plan',
+  };
   const workspacePage = pageNames[pathname.split('/')[2]] || 'Overview';
   const [darkMode, setDarkMode] = useTheme();
   const [user, setUser] = useState<User | null>(null);
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const page = workspacePage;
   const [modal, setModal] = useState<Modal>(null);
   const [busy, setBusy] = useState(false);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<number | null>(null);
   const selectedConversation = useRef<number | null>(null);
   selectedConversation.current = selected;
@@ -128,30 +133,41 @@ export default function App() {
   useEffect(() => {
     if (!mobile) return;
     const sidebar = sidebarRef.current;
-    sidebar?.querySelector<HTMLButtonElement>(".sidebar-close")?.focus();
+    sidebar?.querySelector<HTMLButtonElement>('.sidebar-close')?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === 'Escape') {
         event.preventDefault();
         setMobile(false);
       }
-      if (event.key === "Tab" && sidebar) {
-        const controls = Array.from(sidebar.querySelectorAll<HTMLElement>("a[href],button:not(:disabled),input,select,textarea,[tabindex='0']"))
-          .filter((element) => element.getClientRects().length && getComputedStyle(element).visibility !== "hidden");
-        const first = controls[0], last = controls[controls.length - 1];
+      if (event.key === 'Tab' && sidebar) {
+        const controls = Array.from(
+          sidebar.querySelectorAll<HTMLElement>(
+            "a[href],button:not(:disabled),input,select,textarea,[tabindex='0']",
+          ),
+        ).filter(
+          (element) =>
+            element.getClientRects().length && getComputedStyle(element).visibility !== 'hidden',
+        );
+        const first = controls[0],
+          last = controls[controls.length - 1];
         if (event.shiftKey && document.activeElement === first) {
-          event.preventDefault(); last?.focus();
+          event.preventDefault();
+          last?.focus();
         } else if (!event.shiftKey && document.activeElement === last) {
-          event.preventDefault(); first?.focus();
+          event.preventDefault();
+          first?.focus();
         }
       }
     };
-    const desktop = window.matchMedia("(min-width:761px)");
-    const onResize = () => { if (desktop.matches) setMobile(false); };
-    document.addEventListener("keydown", onKeyDown);
-    desktop.addEventListener("change", onResize);
+    const desktop = window.matchMedia('(min-width:761px)');
+    const onResize = () => {
+      if (desktop.matches) setMobile(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    desktop.addEventListener('change', onResize);
     return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      desktop.removeEventListener("change", onResize);
+      document.removeEventListener('keydown', onKeyDown);
+      desktop.removeEventListener('change', onResize);
       menuButton.current?.focus({ preventScroll: true });
     };
   }, [mobile]);
@@ -159,14 +175,14 @@ export default function App() {
 
   async function refresh() {
     const conversationId = selectedConversation.current;
-    const next = await api<Workspace>(conversationId ? `workspace?conversation_id=${conversationId}` : 'workspace');
+    const next = await api<Workspace>(
+      conversationId ? `workspace?conversation_id=${conversationId}` : 'workspace',
+    );
     // An older background response must not discard a conversation just opened from a later contact page.
     if (selectedConversation.current === conversationId) setWorkspace(next);
   }
   async function session() {
-    const data = await api<{ user: User | null; demo_available: boolean }>(
-      "session",
-    );
+    const data = await api<{ user: User | null; demo_available: boolean }>('session');
     if (!data.user) {
       router.replace('/login');
       return;
@@ -181,28 +197,25 @@ export default function App() {
   }, []);
   useEffect(() => {
     if (notice) {
-      const timer = setTimeout(() => setNotice(""), 4500);
+      const timer = setTimeout(() => setNotice(''), 4500);
       return () => clearTimeout(timer);
     }
   }, [notice]);
   useEffect(() => {
-    if (workspace && !workspace.conversations.some(c => c.id === selected)) {
+    if (workspace && !workspace.conversations.some((c) => c.id === selected)) {
       setSelected(workspace.conversations[0]?.id ?? null);
     }
   }, [workspace, selected]);
   useEffect(() => {
     if (!user || !workspace?.integrations.whatsapp) return;
-    const timer = setInterval(() => { refresh().catch(() => {}); }, 10000);
+    const timer = setInterval(() => {
+      refresh().catch(() => {});
+    }, 10000);
     return () => clearInterval(timer);
   }, [user?.id, workspace?.integrations.whatsapp?.phone_number_id]);
-  async function mutate(
-    path: string,
-    method: string,
-    body: unknown,
-    message = "Changes saved",
-  ) {
+  async function mutate(path: string, method: string, body: unknown, message = 'Changes saved') {
     setBusy(true);
-    setError("");
+    setError('');
     try {
       await api(path, method, body);
       await refresh();
@@ -217,26 +230,26 @@ export default function App() {
   }
   function navigate(next: Page) {
     router.push(`/app/${paths[next]}`);
-    setQuery("");
+    setQuery('');
     setMobile(false);
-    setError("");
+    setError('');
   }
   async function openConversation(c: Conversation) {
     setSelected(c.id);
-    navigate("Inbox");
+    navigate('Inbox');
     if (c.unread)
-      await mutate(
-        `conversations/${c.id}`,
-        "PATCH",
-        { unread: 0 },
-        "Conversation marked as read",
-      );
+      await mutate(`conversations/${c.id}`, 'PATCH', { unread: 0 }, 'Conversation marked as read');
   }
   async function logout() {
     setBusy(true);
-    try { await api('auth/logout', 'POST'); router.replace('/login'); }
-    catch (e) { setError((e as Error).message); }
-    finally { setBusy(false); }
+    try {
+      await api('auth/logout', 'POST');
+      router.replace('/login');
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
   }
   if (loading)
     return (
@@ -252,61 +265,48 @@ export default function App() {
       <div className="loading">
         <h2>We couldn’t load your workspace</h2>
         <p>{error}</p>
-        <button onClick={() => session().catch((e) => setError(e.message))}>
-          Try again
-        </button>
+        <button onClick={() => session().catch((e) => setError(e.message))}>Try again</button>
         <button onClick={logout}>Sign out</button>
       </div>
     );
   const w = workspace;
-  const current =
-    w.conversations.find((c) => c.id === selected) || w.conversations[0];
-  const filtered = (value: string) =>
-    value.toLowerCase().includes(query.toLowerCase());
+  const current = w.conversations.find((c) => c.id === selected) || w.conversations[0];
+  const filtered = (value: string) => value.toLowerCase().includes(query.toLowerCase());
   const pageInfo: Record<Page, [string, string]> = {
     Overview: [
-      "A little overview. A lot of possibility.",
-      "Here’s what’s happening with your business today.",
+      'A little overview. A lot of possibility.',
+      'Here’s what’s happening with your business today.',
     ],
-    Inbox: [
-      "Good conversations start here.",
-      "A shared space for every customer conversation.",
-    ],
+    Inbox: ['Good conversations start here.', 'A shared space for every customer conversation.'],
     Customers: [
-      "People, not just contacts.",
-      "Build lasting relationships, one conversation at a time.",
+      'People, not just contacts.',
+      'Build lasting relationships, one conversation at a time.',
     ],
     Automations: [
-      "A helping hand, on autopilot.",
-      "Create keyword replies and test them in your demo inbox.",
+      'A helping hand, on autopilot.',
+      'Create keyword replies and test them in your demo inbox.',
     ],
-    "Knowledge base": [
-      "Your business, in the know.",
-      "Keep approved business information together for your team.",
+    'Knowledge base': [
+      'Your business, in the know.',
+      'Keep approved business information together for your team.',
     ],
-    Products: [
-      "Your collection, all together.",
-      "A little organisation for everything you sell.",
-    ],
+    Products: ['Your collection, all together.', 'A little organisation for everything you sell.'],
     Campaigns: [
-      "Something worth sharing.",
-      "Prepare thoughtful messages for customers who opted in.",
+      'Something worth sharing.',
+      'Prepare thoughtful messages for customers who opted in.',
     ],
-    Settings: [
-      "Make yourself at home.",
-      "Manage your business profile and connection status.",
-    ],
-    "Usage & plan": [
-      "Room for your next chapter.",
-      "Keep track of your local workspace and its limits.",
+    Settings: ['Make yourself at home.', 'Manage your business profile and connection status.'],
+    'Usage & plan': [
+      'Room for your next chapter.',
+      'Keep track of your local workspace and its limits.',
     ],
   };
   const createMap: Partial<Record<Page, [Modal, string]>> = {
-    Customers: ["customers", "Add customer"],
-    Products: ["products", "Add product"],
-    Automations: ["automations", "Create automation"],
-    "Knowledge base": ["knowledge", "Add knowledge"],
-    Campaigns: ["campaigns", "Create campaign"],
+    Customers: ['customers', 'Add customer'],
+    Products: ['products', 'Add product'],
+    Automations: ['automations', 'Create automation'],
+    'Knowledge base': ['knowledge', 'Add knowledge'],
+    Campaigns: ['campaigns', 'Create campaign'],
   };
   async function openCustomerConversation(customerId: number) {
     const conversation = await api<{ id: number }>(`customers/${customerId}/conversation`);
@@ -318,104 +318,113 @@ export default function App() {
   }
   return (
     <div className="app-shell">
-      {mobile && (
-        <div className="sidebar-scrim" onClick={() => setMobile(false)} />
-      )}
-      <aside id="workspace-navigation" ref={sidebarRef} aria-label="Workspace navigation" className={`sidebar ${mobile ? "show" : ""}`}>
-        <button className="icon-button sidebar-close" aria-label="Close navigation" onClick={() => setMobile(false)}><X size={19}/></button>
-        <div className="sidebar-scroll">
-        <a
-          className="brand"
-          href="#"
-          onClick={(e) => {
-            e.preventDefault();
-            navigate("Overview");
-          }}
-        >
-          <div className="brand-icon">
-            <MessageCircle size={23} />
-            <span />
-          </div>
-          wa<span>flow</span>
-          <span className="brand-dot">.</span>
-        </a>
+      {mobile && <div className="sidebar-scrim" onClick={() => setMobile(false)} />}
+      <aside
+        id="workspace-navigation"
+        ref={sidebarRef}
+        aria-label="Workspace navigation"
+        className={`sidebar ${mobile ? 'show' : ''}`}
+      >
         <button
-          className="workspace-picker"
-          onClick={() => navigate("Settings")}
+          className="icon-button sidebar-close"
+          aria-label="Close navigation"
+          onClick={() => setMobile(false)}
         >
-          <span className="store-avatar">
-            L<span>✦</span>
-          </span>
-          <span>
-            <strong>{w.business.name}</strong>
-            <small>Business workspace</small>
-          </span>
-          <ChevronDown size={15} />
+          <X size={19} />
         </button>
-        <span className="nav-caption">WORKSPACE</span>
-        <nav>
-          {navigation.map(([name, Icon]) => (
-            <Link
-              key={name}
-              className={page === name ? "nav-item active" : "nav-item"}
-              href={`/app/${paths[name]}`}
-              aria-current={page === name ? "page" : undefined}
-              onClick={() => { setQuery(""); setMobile(false); setError(""); }}
-            >
-              <Icon size={19} />
-              <span>{name}</span>
-              {name === "Inbox" && w.metrics.open > 0 && (
-                <b>{w.metrics.open}</b>
-              )}
-              {name === "Automations" && <span className="tiny-spark">✧</span>}
-            </Link>
-          ))}
-        </nav>
-        <div className="sidebar-bottom">
-          <div className="plan-card">
-            <div>
-              <Sparkles size={17} />
-              <strong>A little more possibility</strong>
-            </div>
-            <p>
-              Your next customer connection
-              <br />
-              starts with a conversation.
-            </p>
-            <button onClick={() => navigate("Usage & plan")}>
-              Explore your workspace <ArrowUpRight size={14} />
-            </button>
-          </div>
-          <button
-            className={`nav-item ${page === "Settings" ? "active" : ""}`}
-            onClick={() => navigate("Settings")}
+        <div className="sidebar-scroll">
+          <a
+            className="brand"
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              navigate('Overview');
+            }}
           >
-            <Settings size={19} />
-            Settings
-          </button>
-          <button className={`nav-item ${page === "Usage & plan" ? "active" : ""}`} onClick={() => navigate("Usage & plan")}><CreditCard size={19}/>Billing & usage</button>
-          <button className="nav-item" onClick={() => setModal("help")}>
-            <CircleHelp size={19} />
-            Help & getting started
-            <ArrowUpRight size={14} />
-          </button>
-        </div>
-        </div>
-          <div className="sidebar-user">
-            <span className="avatar peach">{initials(user.name)}</span>
-            <span>
-              <strong>{user.name}</strong>
-              <small>Workspace owner</small>
+            <div className="brand-icon">
+              <MessageCircle size={23} />
+              <span />
+            </div>
+            wa<span>flow</span>
+            <span className="brand-dot">.</span>
+          </a>
+          <button className="workspace-picker" onClick={() => navigate('Settings')}>
+            <span className="store-avatar">
+              L<span>✦</span>
             </span>
+            <span>
+              <strong>{w.business.name}</strong>
+              <small>Business workspace</small>
+            </span>
+            <ChevronDown size={15} />
+          </button>
+          <span className="nav-caption">WORKSPACE</span>
+          <nav>
+            {navigation.map(([name, Icon]) => (
+              <Link
+                key={name}
+                className={page === name ? 'nav-item active' : 'nav-item'}
+                href={`/app/${paths[name]}`}
+                aria-current={page === name ? 'page' : undefined}
+                onClick={() => {
+                  setQuery('');
+                  setMobile(false);
+                  setError('');
+                }}
+              >
+                <Icon size={19} />
+                <span>{name}</span>
+                {name === 'Inbox' && w.metrics.open > 0 && <b>{w.metrics.open}</b>}
+                {name === 'Automations' && <span className="tiny-spark">✧</span>}
+              </Link>
+            ))}
+          </nav>
+          <div className="sidebar-bottom">
+            <div className="plan-card">
+              <div>
+                <Sparkles size={17} />
+                <strong>A little more possibility</strong>
+              </div>
+              <p>
+                Your next customer connection
+                <br />
+                starts with a conversation.
+              </p>
+              <button onClick={() => navigate('Usage & plan')}>
+                Explore your workspace <ArrowUpRight size={14} />
+              </button>
+            </div>
             <button
-              className="icon-button"
-              aria-label="Sign out"
-              onClick={logout}
-              disabled={busy}
+              className={`nav-item ${page === 'Settings' ? 'active' : ''}`}
+              onClick={() => navigate('Settings')}
             >
-              <LogOut size={17} />
+              <Settings size={19} />
+              Settings
+            </button>
+            <button
+              className={`nav-item ${page === 'Usage & plan' ? 'active' : ''}`}
+              onClick={() => navigate('Usage & plan')}
+            >
+              <CreditCard size={19} />
+              Billing & usage
+            </button>
+            <button className="nav-item" onClick={() => setModal('help')}>
+              <CircleHelp size={19} />
+              Help & getting started
+              <ArrowUpRight size={14} />
             </button>
           </div>
+        </div>
+        <div className="sidebar-user">
+          <span className="avatar peach">{initials(user.name)}</span>
+          <span>
+            <strong>{user.name}</strong>
+            <small>Workspace owner</small>
+          </span>
+          <button className="icon-button" aria-label="Sign out" onClick={logout} disabled={busy}>
+            <LogOut size={17} />
+          </button>
+        </div>
       </aside>
       <main className="main">
         <header className="topbar">
@@ -437,20 +446,20 @@ export default function App() {
           <div className="topbar-right">
             <button
               className="icon-button theme-toggle"
-              aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
-              title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+              aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+              title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
               onClick={() => setDarkMode(!darkMode)}
             >
               {darkMode ? <Sun size={19} /> : <Moon size={19} />}
             </button>
             <span className="connection-dot" />
-            {w.business.demo ? "Demo workspace" : w.integrations.whatsapp ? "WhatsApp connected" : "WhatsApp not connected"}
+            {w.business.demo
+              ? 'Demo workspace'
+              : w.integrations.whatsapp
+                ? 'WhatsApp connected'
+                : 'WhatsApp not connected'}
             <span className="top-divider" />
-            <button
-              className="icon-button"
-              aria-label="Help"
-              onClick={() => setModal("help")}
-            >
+            <button className="icon-button" aria-label="Help" onClick={() => setModal('help')}>
               <CircleHelp size={19} />
             </button>
             <span className="avatar small peach">{initials(user.name)}</span>
@@ -460,7 +469,7 @@ export default function App() {
           {error && (
             <div className="error-banner" role="alert">
               {error}
-              <button aria-label="Dismiss error" onClick={() => setError("")}>
+              <button aria-label="Dismiss error" onClick={() => setError('')}>
                 <X size={16} />
               </button>
             </div>
@@ -468,7 +477,7 @@ export default function App() {
           <div className="page-heading">
             <div>
               <div className="eyebrow">
-                {page === "Overview"
+                {page === 'Overview'
                   ? `YOUR BUSINESS AT A GLANCE`
                   : `YOUR WORKSPACE / ${page.toUpperCase()}`}
               </div>
@@ -476,7 +485,7 @@ export default function App() {
               <p>{pageInfo[page][1]}</p>
             </div>
             <div className="heading-actions">
-              {page === "Overview" ? (
+              {page === 'Overview' ? (
                 <>
                   <select
                     aria-label="Activity range"
@@ -489,8 +498,8 @@ export default function App() {
                   <button
                     className="primary"
                     onClick={() => {
-                      setError("");
-                      setModal("campaigns");
+                      setError('');
+                      setModal('campaigns');
                     }}
                   >
                     <Plus size={17} />
@@ -502,7 +511,7 @@ export default function App() {
                   <button
                     className="primary"
                     onClick={() => {
-                      setError("");
+                      setError('');
                       setModal(createMap[page]![0]);
                     }}
                   >
@@ -513,15 +522,29 @@ export default function App() {
               ) : null}
             </div>
           </div>
-          {page === "Overview" && (
+          {page === 'Overview' && (
             <>
-              <section className="card" style={{ padding: 24, marginBottom: 24 }} aria-label="Get started">
+              <section
+                className="card"
+                style={{ padding: 24, marginBottom: 24 }}
+                aria-label="Get started"
+              >
                 <h2>Your first WhatsApp campaign</h2>
-                <p className="muted">Follow these three steps to reach customers who want to hear from you.</p>
+                <p className="muted">
+                  Follow these three steps to reach customers who want to hear from you.
+                </p>
                 <div className="tile-grid" style={{ marginTop: 16 }}>
-                  <button onClick={() => navigate('Settings')}><span>{w.integrations.whatsapp ? '✓' : '1.'}</span> Connect WhatsApp <ArrowRight size={16}/></button>
-                  <button onClick={() => navigate('Customers')}><span>{w.customers.some(c => c.opted_in) ? '✓' : '2.'}</span> Import customers & record consent <ArrowRight size={16}/></button>
-                  <button onClick={() => navigate('Campaigns')}><span>3.</span> Review & send a campaign <ArrowRight size={16}/></button>
+                  <button onClick={() => navigate('Settings')}>
+                    <span>{w.integrations.whatsapp ? '✓' : '1.'}</span> Connect WhatsApp{' '}
+                    <ArrowRight size={16} />
+                  </button>
+                  <button onClick={() => navigate('Customers')}>
+                    <span>{w.customers.some((c) => c.opted_in) ? '✓' : '2.'}</span> Import customers
+                    & record consent <ArrowRight size={16} />
+                  </button>
+                  <button onClick={() => navigate('Campaigns')}>
+                    <span>3.</span> Review & send a campaign <ArrowRight size={16} />
+                  </button>
                 </div>
               </section>
               <div className="welcome-banner">
@@ -531,12 +554,9 @@ export default function App() {
                 </div>
                 <div>
                   <strong>More connection. Less busywork.</strong>
-                  <p>
-                    Your conversations, customers, and automations. Happily in
-                    one place.
-                  </p>
+                  <p>Your conversations, customers, and automations. Happily in one place.</p>
                 </div>
-                <button onClick={() => navigate("Automations")}>
+                <button onClick={() => navigate('Automations')}>
                   Meet your automations <ArrowRight size={16} />
                 </button>
               </div>
@@ -544,31 +564,31 @@ export default function App() {
                 {[
                   [
                     MessageCircle,
-                    "Total messages",
+                    'Total messages',
                     w.metrics.messages,
-                    "All-time conversation activity",
-                    "sage",
+                    'All-time conversation activity',
+                    'sage',
                   ],
                   [
                     Users,
-                    "Your customers",
+                    'Your customers',
                     w.metrics.customers,
-                    "People in your community",
-                    "peach",
+                    'People in your community',
+                    'peach',
                   ],
                   [
                     CheckCheck,
-                    "Resolved conversations",
+                    'Resolved conversations',
                     w.metrics.resolved,
-                    "Customers taken care of",
-                    "lavender",
+                    'Customers taken care of',
+                    'lavender',
                   ],
                   [
                     Zap,
-                    "Active automations",
+                    'Active automations',
                     w.metrics.automations,
-                    "Ready to lend a helping hand",
-                    "yellow",
+                    'Ready to lend a helping hand',
+                    'yellow',
                   ],
                 ].map(([Icon, label, value, caption, color]) => {
                   const I = Icon as typeof MessageCircle;
@@ -605,15 +625,17 @@ export default function App() {
                     <span className="bot-icon">
                       <Bot size={25} />
                     </span>
-                    <Badge tone="white">{w.business.demo ? "✧ Rule-based demo" : "✧ AI & automation"}</Badge>
+                    <Badge tone="white">
+                      {w.business.demo ? '✧ Rule-based demo' : '✧ AI & automation'}
+                    </Badge>
                   </div>
                   <h2>
                     A little help.
                     <br />A big difference.
                   </h2>
                   <p>
-                    Let approved replies handle the familiar questions, so you
-                    can focus on the human ones.
+                    Let approved replies handle the familiar questions, so you can focus on the
+                    human ones.
                   </p>
                   <div className="assistant-metric">
                     <span>
@@ -625,7 +647,7 @@ export default function App() {
                       <small>Active workflows</small>
                     </span>
                   </div>
-                  <button onClick={() => navigate("Automations")}>
+                  <button onClick={() => navigate('Automations')}>
                     Manage automations <ArrowUpRight size={17} />
                   </button>
                 </section>
@@ -634,17 +656,12 @@ export default function App() {
                 <div className="card-heading">
                   <div>
                     <h2>
-                      Your latest conversations{" "}
-                      <span className="count-pill">
-                        {w.conversations.length}
-                      </span>
+                      Your latest conversations{' '}
+                      <span className="count-pill">{w.conversations.length}</span>
                     </h2>
                     <p>A few people who would love to hear from you.</p>
                   </div>
-                  <button
-                    className="text-button"
-                    onClick={() => navigate("Inbox")}
-                  >
+                  <button className="text-button" onClick={() => navigate('Inbox')}>
                     Go to inbox <ArrowRight size={15} />
                   </button>
                 </div>
@@ -666,7 +683,7 @@ export default function App() {
                           <td>
                             <div className="person">
                               <span
-                                className={`avatar ${["peach", "lavender", "sage", "yellow"][i % 4]}`}
+                                className={`avatar ${['peach', 'lavender', 'sage', 'yellow'][i % 4]}`}
                               >
                                 {initials(c.name)}
                               </span>
@@ -678,30 +695,18 @@ export default function App() {
                           </td>
                           <td className="message-preview">
                             {w.messages
-                              .filter(
-                                (m) =>
-                                  m.conversation_id === c.id &&
-                                  m.direction !== "note",
-                              )
-                              .at(-1)?.body || "No messages yet"}
+                              .filter((m) => m.conversation_id === c.id && m.direction !== 'note')
+                              .at(-1)?.body || 'No messages yet'}
                           </td>
                           <td>
                             <span className="handler">
-                              {c.mode === "ai" ? (
-                                <Bot size={15} />
-                              ) : (
-                                <Users size={15} />
-                              )}{" "}
-                              {c.mode === "ai"
-                                ? "Automation"
-                                : c.assignee || "Unassigned"}
+                              {c.mode === 'ai' ? <Bot size={15} /> : <Users size={15} />}{' '}
+                              {c.mode === 'ai' ? 'Automation' : c.assignee || 'Unassigned'}
                             </span>
                           </td>
                           <td>
-                            <Badge
-                              tone={c.status === "resolved" ? "gray" : "green"}
-                            >
-                              {c.status === "resolved" ? "Resolved" : "Open"}
+                            <Badge tone={c.status === 'resolved' ? 'gray' : 'green'}>
+                              {c.status === 'resolved' ? 'Resolved' : 'Open'}
                             </Badge>
                           </td>
                           <td className="muted">{time(c.updated_at)}</td>
@@ -731,23 +736,23 @@ export default function App() {
               </section>
               <div className="footer-note">
                 <ShieldCheck size={14} />
-                Built for thoughtful businesses. Made for meaningful
-                connections.
+                Built for thoughtful businesses. Made for meaningful connections.
                 <span>
                   {w.business.demo
-                    ? "Sample data · No live messages are sent"
-                    : w.integrations.whatsapp ? "WhatsApp Cloud API connected" : "Connect WhatsApp in Settings"}
+                    ? 'Sample data · No live messages are sent'
+                    : w.integrations.whatsapp
+                      ? 'WhatsApp Cloud API connected'
+                      : 'Connect WhatsApp in Settings'}
                 </span>
               </div>
             </>
           )}
-          {page === "Inbox" && (
+          {page === 'Inbox' && (
             <div className="inbox card">
               <aside className="conversation-list">
                 <div className="list-head">
                   <h2>
-                    Conversations{" "}
-                    <span className="count-pill">{w.metrics.open}</span>
+                    Conversations <span className="count-pill">{w.metrics.open}</span>
                   </h2>
                   <SearchBox
                     value={query}
@@ -760,35 +765,25 @@ export default function App() {
                   .map((c, i) => (
                     <button
                       key={c.id}
-                      className={`conversation-item ${current?.id === c.id ? "selected" : ""}`}
+                      className={`conversation-item ${current?.id === c.id ? 'selected' : ''}`}
                       onClick={() => openConversation(c)}
                     >
-                      <span
-                        className={`avatar ${i % 2 ? "lavender" : "peach"}`}
-                      >
+                      <span className={`avatar ${i % 2 ? 'lavender' : 'peach'}`}>
                         {initials(c.name)}
                       </span>
                       <span>
                         <strong>{c.name}</strong>
                         <small>
-                          {w.messages
-                            .filter((m) => m.conversation_id === c.id)
-                            .at(-1)?.body || "Start a conversation"}
+                          {w.messages.filter((m) => m.conversation_id === c.id).at(-1)?.body ||
+                            'Start a conversation'}
                         </small>
-                        <Badge
-                          tone={c.status === "resolved" ? "gray" : "green"}
-                        >
-                          {c.status}
-                        </Badge>
+                        <Badge tone={c.status === 'resolved' ? 'gray' : 'green'}>{c.status}</Badge>
                       </span>
                       {c.unread > 0 && <i className="unread-dot" />}
                     </button>
                   ))}
                 {!w.conversations.length && (
-                  <Empty
-                    title="No conversations yet"
-                    body="Add a customer to get started."
-                  />
+                  <Empty title="No conversations yet" body="Add a customer to get started." />
                 )}
               </aside>
               {current ? (
@@ -799,7 +794,7 @@ export default function App() {
                   user={user}
                   busy={busy}
                   mutate={mutate}
-                  onSimulate={() => setModal("simulate")}
+                  onSimulate={() => setModal('simulate')}
                 />
               ) : (
                 <Empty
@@ -809,22 +804,27 @@ export default function App() {
               )}
             </div>
           )}
-          {page === "Customers" && <Customers version={w.metrics.customers} refresh={refresh} openConversation={openCustomerConversation}/>}
-          {page === "Automations" && (
+          {page === 'Customers' && (
+            <Customers
+              version={w.metrics.customers}
+              refresh={refresh}
+              openConversation={openCustomerConversation}
+            />
+          )}
+          {page === 'Automations' && (
             <>
               <div className="info-strip">
                 <Sparkles size={18} />
                 <span>
-                  Test your replies in the demo inbox. A matching keyword sends
-                  your approved reply; unmatched questions are handed to a
-                  human.
+                  Test your replies in the demo inbox. A matching keyword sends your approved reply;
+                  unmatched questions are handed to a human.
                 </span>
               </div>
               <div className="tile-grid">
                 {w.automations.map((a, i) => (
                   <section className="card workflow-card" key={a.id}>
                     <div className="tile-top">
-                      <span className={`tile-icon ${i % 2 ? "peach" : "sage"}`}>
+                      <span className={`tile-icon ${i % 2 ? 'peach' : 'sage'}`}>
                         <Workflow size={23} />
                       </span>
                       <button
@@ -832,9 +832,9 @@ export default function App() {
                         aria-checked={!!a.active}
                         aria-label={`Activate ${a.name}`}
                         disabled={busy}
-                        className={`switch ${a.active ? "on" : ""}`}
+                        className={`switch ${a.active ? 'on' : ''}`}
                         onClick={() =>
-                          mutate(`automations/${a.id}`, "PATCH", {
+                          mutate(`automations/${a.id}`, 'PATCH', {
                             active: !a.active,
                           })
                         }
@@ -851,8 +851,8 @@ export default function App() {
                       <Send size={15} />
                     </div>
                     <div className="tile-footer">
-                      <Badge tone={a.active ? "green" : "gray"}>
-                        {a.active ? "Active" : "Paused"}
+                      <Badge tone={a.active ? 'green' : 'gray'}>
+                        {a.active ? 'Active' : 'Paused'}
                       </Badge>
                       <span>{a.runs} runs</span>
                     </div>
@@ -867,7 +867,7 @@ export default function App() {
               )}
             </>
           )}
-          {page === "Products" && (
+          {page === 'Products' && (
             <>
               <div className="section-toolbar">
                 <SearchBox
@@ -891,16 +891,13 @@ export default function App() {
                         <h2>{p.name}</h2>
                         <div>
                           <strong>{money(p.price_paise)}</strong>
-                          <Badge tone={p.stock < 10 ? "amber" : "green"}>
-                            {p.stock} in stock
-                          </Badge>
+                          <Badge tone={p.stock < 10 ? 'amber' : 'green'}>{p.stock} in stock</Badge>
                         </div>
                       </div>
                     </section>
                   ))}
               </div>
-              {!w.products.filter((p) => filtered(p.name + p.sku + p.category))
-                .length && (
+              {!w.products.filter((p) => filtered(p.name + p.sku + p.category)).length && (
                 <Empty
                   title="Your collection starts here"
                   body="Add a product or try a different search."
@@ -908,13 +905,13 @@ export default function App() {
               )}
             </>
           )}
-          {page === "Knowledge base" && (
+          {page === 'Knowledge base' && (
             <>
               <div className="info-strip">
                 <BookOpen size={18} />
                 <span>
-                  Approved reference material for your team and AI assistant.
-                  Enable live AI in Settings to use this knowledge.
+                  Approved reference material for your team and AI assistant. Enable live AI in
+                  Settings to use this knowledge.
                 </span>
               </div>
               <div className="tile-grid">
@@ -937,9 +934,52 @@ export default function App() {
               )}
             </>
           )}
-          {page === "Campaigns" && <Campaigns w={w} refresh={refresh}/>}
-          {page === "Settings" && <><section className="card settings-card business-profile"><h2>Business profile</h2><form key={w.business.name} onSubmit={e => { e.preventDefault(); mutate(`businesses/${w.business.id}`, 'PATCH', Object.fromEntries(new FormData(e.currentTarget))); }}><div className="form-row"><label>Business name<input name="name" defaultValue={w.business.name} required maxLength={100}/></label><label>Industry<input name="industry" defaultValue={w.business.industry} required maxLength={100}/></label><label>Business email<input name="email" defaultValue={w.business.email || ''} type="email"/></label></div><button className="primary" disabled={busy}>Save changes</button></form></section><IntegrationSettings w={w} busy={busy} mutate={mutate} refresh={refresh}/></>}
-          {page === "Usage & plan" && <BillingPanel w={w} busy={busy} mutate={mutate} refresh={refresh}/>}
+          {page === 'Campaigns' && <Campaigns w={w} refresh={refresh} />}
+          {page === 'Settings' && (
+            <>
+              <section className="card settings-card business-profile">
+                <h2>Business profile</h2>
+                <form
+                  key={w.business.name}
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    mutate(
+                      `businesses/${w.business.id}`,
+                      'PATCH',
+                      Object.fromEntries(new FormData(e.currentTarget)),
+                    );
+                  }}
+                >
+                  <div className="form-row">
+                    <label>
+                      Business name
+                      <input name="name" defaultValue={w.business.name} required maxLength={100} />
+                    </label>
+                    <label>
+                      Industry
+                      <input
+                        name="industry"
+                        defaultValue={w.business.industry}
+                        required
+                        maxLength={100}
+                      />
+                    </label>
+                    <label>
+                      Business email
+                      <input name="email" defaultValue={w.business.email || ''} type="email" />
+                    </label>
+                  </div>
+                  <button className="primary" disabled={busy}>
+                    Save changes
+                  </button>
+                </form>
+              </section>
+              <IntegrationSettings w={w} busy={busy} mutate={mutate} refresh={refresh} />
+            </>
+          )}
+          {page === 'Usage & plan' && (
+            <BillingPanel w={w} busy={busy} mutate={mutate} refresh={refresh} />
+          )}
         </div>
       </main>
       {notice && (
@@ -955,28 +995,23 @@ export default function App() {
           error={error}
           onClose={() => {
             setModal(null);
-            setError("");
+            setError('');
           }}
           onSubmit={async (data) => {
-            if (modal === "help") return;
-            if (modal === "products") {
+            if (modal === 'help') return;
+            if (modal === 'products') {
               data.price_paise = Math.round(Number(data.price) * 100);
               delete data.price;
               data.stock = Number(data.stock);
             }
-            if (modal === "customers") data.opted_in = data.opted_in === "on";
-            const path =
-              modal === "simulate"
-                ? `conversations/${current?.id}/simulate`
-                : modal;
+            if (modal === 'customers') data.opted_in = data.opted_in === 'on';
+            const path = modal === 'simulate' ? `conversations/${current?.id}/simulate` : modal;
             if (
               await mutate(
                 path,
-                "POST",
+                'POST',
                 data,
-                modal === "simulate"
-                  ? "Demo message received"
-                  : "Saved to your workspace",
+                modal === 'simulate' ? 'Demo message received' : 'Saved to your workspace',
               )
             )
               setModal(null);
@@ -1009,19 +1044,15 @@ function SearchBox({
   );
 }
 
-function ActivityChart({
-  activity,
-  days,
-}: {
-  activity: Workspace["activity"];
-  days: number;
-}) {
+function ActivityChart({ activity, days }: { activity: Workspace['activity']; days: number }) {
   const chartRef = useRef<HTMLDivElement>(null);
   const [chartWidth, setChartWidth] = useState(700);
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart) return;
-    const observer = new ResizeObserver(([entry]) => setChartWidth(Math.max(200, entry.contentRect.width)));
+    const observer = new ResizeObserver(([entry]) =>
+      setChartWidth(Math.max(200, entry.contentRect.width)),
+    );
     observer.observe(chart);
     return () => observer.disconnect();
   }, []);
@@ -1032,20 +1063,18 @@ function ActivityChart({
     date.setUTCDate(date.getUTCDate() - days + i + 1);
     const key = date.toISOString().slice(0, 10);
     return {
-      label: date.toLocaleDateString("en-IN", {
-        month: "short",
-        day: "numeric",
-        timeZone: "UTC",
+      label: date.toLocaleDateString('en-IN', {
+        month: 'short',
+        day: 'numeric',
+        timeZone: 'UTC',
       }),
       count: Number(activity.find((a) => a.day === key)?.count || 0),
     };
   });
   const max = Math.max(4, ...entries.map((e) => e.count));
   const points = entries
-    .map(
-      (e, i) => `${45 + (i * plotWidth) / (days - 1)},${185 - (e.count / max) * 150}`,
-    )
-    .join(" ");
+    .map((e, i) => `${45 + (i * plotWidth) / (days - 1)},${185 - (e.count / max) * 150}`)
+    .join(' ');
   return (
     <div className="chart" ref={chartRef}>
       <svg
@@ -1096,7 +1125,8 @@ function ActivityChart({
                 {e.label}: {e.count} messages
               </title>
             </circle>
-            {(i % (chartWidth < 480 ? (days === 14 ? 5 : 3) : (days === 14 ? 3 : 2)) === 0 || i === days - 1) && (
+            {(i % (chartWidth < 480 ? (days === 14 ? 5 : 3) : days === 14 ? 3 : 2) === 0 ||
+              i === days - 1) && (
               <text x={45 + (i * plotWidth) / (days - 1)} y="216" textAnchor="middle">
                 {e.label}
               </text>
@@ -1120,21 +1150,16 @@ function Chat({
   w: Workspace;
   user: User;
   busy: boolean;
-  mutate: (
-    path: string,
-    method: string,
-    body: unknown,
-    message?: string,
-  ) => Promise<boolean>;
+  mutate: (path: string, method: string, body: unknown, message?: string) => Promise<boolean>;
   onSimulate: () => void;
 }) {
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState('');
   const [note, setNote] = useState(false);
   const end = useRef<HTMLDivElement>(null);
   const requestKey = useRef(crypto.randomUUID());
   const messages = w.messages.filter((m) => m.conversation_id === c.id);
   useEffect(() => {
-    end.current?.scrollIntoView({ block: "nearest" });
+    end.current?.scrollIntoView({ block: 'nearest' });
   }, [messages.length]);
   return (
     <div className="chat">
@@ -1149,13 +1174,13 @@ function Chat({
         <button
           disabled={busy}
           onClick={() =>
-            mutate(`conversations/${c.id}`, "PATCH", {
-              status: c.status === "open" ? "resolved" : "open",
+            mutate(`conversations/${c.id}`, 'PATCH', {
+              status: c.status === 'open' ? 'resolved' : 'open',
             })
           }
         >
           <CheckCheck size={16} />
-          {c.status === "open" ? "Resolve" : "Reopen"}
+          {c.status === 'open' ? 'Resolve' : 'Reopen'}
         </button>
       </div>
       <div className="chat-controls">
@@ -1163,19 +1188,17 @@ function Chat({
           aria-label="Conversation handler"
           value={c.mode}
           disabled={busy}
-          onChange={(e) =>
-            mutate(`conversations/${c.id}`, "PATCH", { mode: e.target.value })
-          }
+          onChange={(e) => mutate(`conversations/${c.id}`, 'PATCH', { mode: e.target.value })}
         >
           <option value="human">Human handling</option>
-          <option value="ai">{w.business.demo ? "Automation demo" : "AI & automation"}</option>
+          <option value="ai">{w.business.demo ? 'Automation demo' : 'AI & automation'}</option>
         </select>
         <select
           aria-label="Assign conversation"
-          value={c.assignee || ""}
+          value={c.assignee || ''}
           disabled={busy}
           onChange={(e) =>
-            mutate(`conversations/${c.id}`, "PATCH", {
+            mutate(`conversations/${c.id}`, 'PATCH', {
               assignee: e.target.value || null,
             })
           }
@@ -1192,24 +1215,24 @@ function Chat({
       <div className="messages">
         <div className="chat-date">
           {w.business.demo
-            ? "Demo conversation · messages stay in this workspace"
-            : w.integrations.whatsapp ? "Live WhatsApp conversation" : "Customer conversation · WhatsApp not connected"}
+            ? 'Demo conversation · messages stay in this workspace'
+            : w.integrations.whatsapp
+              ? 'Live WhatsApp conversation'
+              : 'Customer conversation · WhatsApp not connected'}
         </div>
         {messages.map((m) => (
           <div className={`message ${m.direction}`} key={m.id}>
             <p>{m.body}</p>
             <small>
-              {m.direction === "note" ? "Internal note · " : ""}
+              {m.direction === 'note' ? 'Internal note · ' : ''}
               {time(m.created_at)}
-              {m.direction === "outbound" && ` · ${m.status}`} {m.error_code && ` · ${m.error_code}`}
+              {m.direction === 'outbound' && ` · ${m.status}`}{' '}
+              {m.error_code && ` · ${m.error_code}`}
             </small>
           </div>
         ))}
         {!messages.length && (
-          <Empty
-            title="Start the conversation"
-            body="Save a note to keep your team in the loop."
-          />
+          <Empty title="Start the conversation" body="Save a note to keep your team in the loop." />
         )}
         <div ref={end} />
       </div>
@@ -1221,49 +1244,52 @@ function Chat({
             draft.trim() &&
             (await mutate(
               `conversations/${c.id}/messages`,
-              "POST",
-              { body: draft.trim(), direction: note ? "note" : "outbound", client_key: requestKey.current },
-              note ? "Internal note saved" : w.business.demo ? "Demo reply saved" : "Reply queued for WhatsApp",
+              'POST',
+              {
+                body: draft.trim(),
+                direction: note ? 'note' : 'outbound',
+                client_key: requestKey.current,
+              },
+              note
+                ? 'Internal note saved'
+                : w.business.demo
+                  ? 'Demo reply saved'
+                  : 'Reply queued for WhatsApp',
             ))
           )
-            setDraft("");
+            setDraft('');
         }}
       >
         <div className="composer-tabs">
-          <button
-            type="button"
-            className={!note ? "chosen" : ""}
-            onClick={() => setNote(false)}
-          >
+          <button type="button" className={!note ? 'chosen' : ''} onClick={() => setNote(false)}>
             Reply
           </button>
-          <button
-            type="button"
-            className={note ? "chosen" : ""}
-            onClick={() => setNote(true)}
-          >
+          <button type="button" className={note ? 'chosen' : ''} onClick={() => setNote(true)}>
             Internal note
           </button>
         </div>
         <textarea
-          aria-label={note ? "Internal note" : "Message"}
+          aria-label={note ? 'Internal note' : 'Message'}
           value={draft}
-          onChange={(e) => { setDraft(e.target.value); requestKey.current = crypto.randomUUID(); }}
-          placeholder={
-            note ? "Leave a note for your team…" : "Write a thoughtful reply…"
-          }
+          onChange={(e) => {
+            setDraft(e.target.value);
+            requestKey.current = crypto.randomUUID();
+          }}
+          placeholder={note ? 'Leave a note for your team…' : 'Write a thoughtful reply…'}
           required
           maxLength={4000}
         />
         <div className="composer-bottom">
           <span>
             {note
-              ? "Only visible to your team"
-              : w.business.demo ? "Demo replies are not sent to WhatsApp" : "Live replies require a customer message within 24 hours"}
+              ? 'Only visible to your team'
+              : w.business.demo
+                ? 'Demo replies are not sent to WhatsApp'
+                : 'Live replies require a customer message within 24 hours'}
           </span>
           <button className="primary" disabled={busy || !draft.trim()}>
             <Send size={15} />
-            {note ? "Save note" : w.business.demo ? "Send demo reply" : "Send WhatsApp reply"}
+            {note ? 'Save note' : w.business.demo ? 'Send demo reply' : 'Send WhatsApp reply'}
           </button>
         </div>
       </form>
@@ -1289,13 +1315,13 @@ function ModalView({
     dialog.current?.showModal();
   }, []);
   const titles = {
-    customers: "Meet your next customer.",
-    products: "Add to your collection.",
-    automations: "A little less busywork.",
-    knowledge: "Share what you know.",
-    campaigns: "Create something worth sharing.",
-    simulate: "Try a customer message.",
-    help: "A good place to start.",
+    customers: 'Meet your next customer.',
+    products: 'Add to your collection.',
+    automations: 'A little less busywork.',
+    knowledge: 'Share what you know.',
+    campaigns: 'Create something worth sharing.',
+    simulate: 'Try a customer message.',
+    help: 'A good place to start.',
   };
   return (
     <dialog
@@ -1312,12 +1338,7 @@ function ModalView({
         <span className="tile-icon sage">
           <Sparkles size={21} />
         </span>
-        <button
-          className="icon-button"
-          aria-label="Close dialog"
-          disabled={busy}
-          onClick={onClose}
-        >
+        <button className="icon-button" aria-label="Close dialog" disabled={busy} onClick={onClose}>
           <X size={20} />
         </button>
       </div>
@@ -1327,30 +1348,32 @@ function ModalView({
           {error}
         </div>
       )}
-      {modal === "help" ? (
+      {modal === 'help' ? (
         <div className="help-content">
           <p>Welcome to WaFlow, your local business workspace.</p>
           <ol>
             <li>
-              <strong>Add your customers.</strong> Create a contact with an
-              international phone number.
+              <strong>Add your customers.</strong> Create a contact with an international phone
+              number.
             </li>
             <li>
-              <strong>Try the inbox.</strong> Send demo replies, add notes,
-              assign conversations, and mark them resolved.
+              <strong>Try the inbox.</strong> Send demo replies, add notes, assign conversations,
+              and mark them resolved.
             </li>
             <li>
-              <strong>Test an automation.</strong> Enable a keyword reply,
-              choose “Automation demo” in the inbox, then simulate an incoming
-              message containing its keyword.
+              <strong>Test an automation.</strong> Enable a keyword reply, choose “Automation demo”
+              in the inbox, then simulate an incoming message containing its keyword.
             </li>
             <li>
-              <strong>Build your collection.</strong> Add products, business
-              knowledge, and campaign drafts.
+              <strong>Build your collection.</strong> Add products, business knowledge, and campaign
+              drafts.
             </li>
           </ol>
           <p>
-            Configure live WhatsApp, OpenAI, and Razorpay in Settings and Billing. A permanent account, provider credentials, public HTTPS webhooks, and a running queue worker are required. Campaigns use approved text templates and opted-in customers. Media campaigns are not supported.
+            Configure live WhatsApp, OpenAI, and Razorpay in Settings and Billing. A permanent
+            account, provider credentials, public HTTPS webhooks, and a running queue worker are
+            required. Campaigns use approved text templates and opted-in customers. Media campaigns
+            are not supported.
           </p>
         </div>
       ) : (
@@ -1360,7 +1383,7 @@ function ModalView({
             onSubmit(Object.fromEntries(new FormData(e.currentTarget)));
           }}
         >
-          {modal === "customers" && (
+          {modal === 'customers' && (
             <>
               <label>
                 Full name
@@ -1398,10 +1421,17 @@ function ModalView({
                 <input name="opted_in" type="checkbox" />
                 Customer has agreed to receive marketing messages
               </label>
-              <label>Consent source (required when opted in)<input name="consent_source" maxLength={255} placeholder="e.g. In-store signup form, date"/></label>
+              <label>
+                Consent source (required when opted in)
+                <input
+                  name="consent_source"
+                  maxLength={255}
+                  placeholder="e.g. In-store signup form, date"
+                />
+              </label>
             </>
           )}
-          {modal === "products" && (
+          {modal === 'products' && (
             <>
               <label>
                 Product name
@@ -1420,47 +1450,25 @@ function ModalView({
               <div className="form-row">
                 <label>
                   Price (₹)
-                  <input
-                    name="price"
-                    type="number"
-                    min="0"
-                    max="1000000"
-                    step="0.01"
-                    required
-                  />
+                  <input name="price" type="number" min="0" max="1000000" step="0.01" required />
                 </label>
                 <label>
                   Stock quantity
-                  <input
-                    name="stock"
-                    type="number"
-                    min="0"
-                    max="1000000"
-                    step="1"
-                    required
-                  />
+                  <input name="stock" type="number" min="0" max="1000000" step="1" required />
                 </label>
               </div>
             </>
           )}
-          {modal === "automations" && (
+          {modal === 'automations' && (
             <>
-              <p>
-                Create an approved reply for a familiar question. New
-                automations start paused.
-              </p>
+              <p>Create an approved reply for a familiar question. New automations start paused.</p>
               <label>
                 Automation name
                 <input name="name" required maxLength={100} autoFocus />
               </label>
               <label>
                 When a message contains
-                <input
-                  name="keyword"
-                  placeholder="e.g. delivery"
-                  required
-                  maxLength={60}
-                />
+                <input name="keyword" placeholder="e.g. delivery" required maxLength={60} />
               </label>
               <label>
                 Reply with
@@ -1468,7 +1476,7 @@ function ModalView({
               </label>
             </>
           )}
-          {modal === "knowledge" && (
+          {modal === 'knowledge' && (
             <>
               <label>
                 Title
@@ -1486,7 +1494,7 @@ function ModalView({
               </label>
             </>
           )}
-          {modal === "campaigns" && (
+          {modal === 'campaigns' && (
             <>
               <label>
                 Campaign name
@@ -1510,26 +1518,18 @@ function ModalView({
                 Message draft
                 <textarea name="body" required maxLength={4000} rows={5} />
               </label>
-              <p className="muted">
-                Saved as a draft. No messages will be sent.
-              </p>
+              <p className="muted">Saved as a draft. No messages will be sent.</p>
             </>
           )}
-          {modal === "simulate" && (
+          {modal === 'simulate' && (
             <>
               <p>
-                Try “Do you deliver to Mumbai?” with Automation demo enabled to
-                test the shipping rule.
+                Try “Do you deliver to Mumbai?” with Automation demo enabled to test the shipping
+                rule.
               </p>
               <label>
                 Customer message
-                <textarea
-                  name="body"
-                  required
-                  maxLength={4000}
-                  rows={4}
-                  autoFocus
-                />
+                <textarea name="body" required maxLength={4000} rows={4} autoFocus />
               </label>
             </>
           )}
@@ -1538,11 +1538,7 @@ function ModalView({
               Cancel
             </button>
             <button className="primary" disabled={busy}>
-              {busy
-                ? "Saving…"
-                : modal === "simulate"
-                  ? "Simulate message"
-                  : "Save to workspace"}
+              {busy ? 'Saving…' : modal === 'simulate' ? 'Simulate message' : 'Save to workspace'}
               <ArrowRight size={15} />
             </button>
           </div>
@@ -1559,10 +1555,10 @@ function Garment({ index }: { index: number }) {
       <path
         d={
           index % 2
-            ? "M73 32 L50 42 27 77 50 91 65 71 60 143 140 143 135 71 150 91 173 77 150 42 127 32 Q100 56 73 32Z"
-            : "M74 30 L54 43 38 74 59 86 67 70 65 119 78 148 98 137 100 121 102 137 122 148 135 119 133 70 141 86 162 74 146 43 126 30 Q100 53 74 30Z"
+            ? 'M73 32 L50 42 27 77 50 91 65 71 60 143 140 143 135 71 150 91 173 77 150 42 127 32 Q100 56 73 32Z'
+            : 'M74 30 L54 43 38 74 59 86 67 70 65 119 78 148 98 137 100 121 102 137 122 148 135 119 133 70 141 86 162 74 146 43 126 30 Q100 53 74 30Z'
         }
-        fill={["#a7b29a", "#d8b7a3", "#b1a597", "#cbbf99"][index % 4]}
+        fill={['#a7b29a', '#d8b7a3', '#b1a597', '#cbbf99'][index % 4]}
         stroke="#fff"
         strokeOpacity=".5"
         strokeWidth="2"
@@ -1580,8 +1576,3 @@ function Garment({ index }: { index: number }) {
     </svg>
   );
 }
-
-
-
-
-
